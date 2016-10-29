@@ -5,7 +5,13 @@
 
 char* getRandomKey(int size);
 
-int calcularProbabilidades(char* text, int len, FILE* outfile, MODO m);
+int calcularProbabilidadesTexto(char* text, int len, FILE* outfile, modo m);
+
+int calcularProbabilidadesFichero(FILE* infile, FILE* outfile, modo m);
+
+int calcularProbabilidades(char* text, int len, modo m,
+		double probCifrado[ALPHA_SIZE],
+		double probConjunto[ALPHA_SIZE][ALPHA_SIZE]);
 
 int main (int argc, char* argv[]) {
 	int c;
@@ -98,21 +104,17 @@ int main (int argc, char* argv[]) {
 			}
 			len = strlen(strbuf);
 			if (strbuf[len-1] == '\n') {
-				strbuf[len-1] '\0';
+				strbuf[len-1] = '\0';
 				len--; 			
 			}
 						
 			toUpperOnly(strbuf);
 			len = strlen(strbuf);
 
-			calcularProbabilidades(strbuf, len, fout, modo);
+			calcularProbabilidadesTexto(strbuf, len, fout, modo);
 		}
 	} else {
-		//fseek(fin, 0, SEEK_END);
-		//file_text = (char*)malloc((ftell(fin) + 1) * sizeof(char));
-		//if (file_text == NULL) {
-		//	perror("Al reservar memoria para copiar el archivo")
-		//}
+		calcularProbabilidadesFichero(fin, fout, modo);
 	}
 	
 	fclose(fin);
@@ -139,16 +141,16 @@ char* getRandomKey(int size) {
 }
 
 
-int calcularProbabilidades(char* text, int len, FILE* outfile, MODO m) {
+int calcularProbabilidades(char* text, int len, modo m,
+		double probCifrado[ALPHA_SIZE],
+		double probConjunto[ALPHA_SIZE][ALPHA_SIZE]) {
 	double* cipherProbabilities;
 	double** intersectionProbabilities;
-	double totalCipherProbabilities[ALPHA_SIZE];
-	double totalIntersectionProbabilities[ALPHA_SIZE][ALPHA_SIZE];
 	char* key;
 	char* basekey;
 	
-	memset(totalCipherProbabilities, 0, ALPHA_SIZE * sizeof(double));
-	memset(totalIntersectionProbabilities, 0, ALPHA_SIZE * ALPHA_SIZE * sizeof(double));
+	memset(probCifrado, 0, ALPHA_SIZE * sizeof(double));
+	memset(probConjunto, 0, ALPHA_SIZE * ALPHA_SIZE * sizeof(double));
 	
 	char* ciphertext = (char*)malloc(len * sizeof(char));
 	
@@ -164,13 +166,15 @@ int calcularProbabilidades(char* text, int len, FILE* outfile, MODO m) {
 		return -1;
 	}
 	
-	int i, j, k;
 	//As during random generation any key character can coincide
 	//incidentally with the corresponding basekey character
 	//bias must be adjusted to account for it so that chance
 	//of coincidence trully is the provided bias
 	const double adjusted_bias = 1
 			- ((ALPHA_SIZE - 1)/(ALPHA_SIZE)) * (1 - BIASED_P);
+			
+	int i, j, k;
+	
 	
 	for (i = 0; i < SAMPLE_SIZE; i++) {
 		//generate key
@@ -208,7 +212,7 @@ int calcularProbabilidades(char* text, int len, FILE* outfile, MODO m) {
 		}
 		
 		for (j = 0; j< ALPHA_SIZE; j++) {
-			totalCipherProbabilities[j] += cipherProbabilities[j];
+			probCifrado[j] += cipherProbabilities[j];
 		}
 		free(cipherProbabilities);
 		
@@ -216,7 +220,7 @@ int calcularProbabilidades(char* text, int len, FILE* outfile, MODO m) {
 		intersectionProbabilities = getIntersectionAlphabetProbabilities(text, len, ciphertext); 
 		for (j = 0; j < ALPHA_SIZE; j++) {
 			for (k = 0; k < ALPHA_SIZE; k++) {
-				totalIntersectionProbabilities[j][k] += intersectionProbabilities[j][k];
+				probConjunto[j][k] += intersectionProbabilities[j][k];
 			}
 			free(intersectionProbabilities[j]);
 		}
@@ -226,13 +230,22 @@ int calcularProbabilidades(char* text, int len, FILE* outfile, MODO m) {
 	free(basekey);
 	
 	for (i = 0; i < ALPHA_SIZE; i++) {
-		totalCipherProbabilities[i] /= SAMPLE_SIZE;
+		probCifrado[i] /= SAMPLE_SIZE;
 		for (j = 0; j < ALPHA_SIZE; j++) {
-			totalIntersectionProbabilities[i][j] /= SAMPLE_SIZE;
-			//fprintf(outfile, "P(%c,%c) = %.3lf ", 'A' + i, 'A' + j,
-			//		totalIntersectionProbabilities[i][j]);
+			probConjunto[i][j] /= SAMPLE_SIZE;
 		}
 	}
+}
+
+int calcularProbabilidadesTexto(char* text, int len, FILE* outfile, modo m) {
+	int i, j;
+	
+	double totalCipherProbabilities[ALPHA_SIZE];
+	double totalIntersectionProbabilities[ALPHA_SIZE][ALPHA_SIZE];
+	
+	calcularProbabilidades(text, len, m, totalCipherProbabilities,
+			totalIntersectionProbabilities);
+	
 	
 	double* plainProbabilities = getAlphabetProbabilities(text, len);
 	if (plainProbabilities == NULL) {
@@ -256,5 +269,87 @@ int calcularProbabilidades(char* text, int len, FILE* outfile, MODO m) {
 		}
 		fputc('\n', outfile);
 	}
+	return 0;
+}
+
+int calcularProbabilidadesFichero(FILE* infile, FILE* outfile, modo m) {
+	char strbuf[MAX_STR];
+	int len = 0;
+	double plainProbTotal[ALPHA_SIZE];
+	double plainProbBuffer[ALPHA_SIZE];
+	double cipherProbBuffer[ALPHA_SIZE];
+	double cipherProbTotal[ALPHA_SIZE];
+	double intersectProbBuffer[ALPHA_SIZE][ALPHA_SIZE];
+	double intersectProbTotal[ALPHA_SIZE][ALPHA_SIZE];
+	double* plainProbabilities;
+	
+	memset(plainProbTotal, 0, ALPHA_SIZE * sizeof(double));
+	memset(cipherProbTotal, 0, ALPHA_SIZE * sizeof(double));
+	memset(intersectProbTotal, 0, ALPHA_SIZE * ALPHA_SIZE * sizeof(double));
+	
+	int i, j, blocks;
+	
+	for(blocks = 0; !feof(infile) && !ferror(infile); blocks++) {
+		len = fread(strbuf, sizeof(char), MAX_STR, infile);
+		
+		plainProbabilities = getAlphabetProbabilities(strbuf, len);
+		if (plainProbabilities == NULL) {
+			perror("Al obtener la tabla de probabilidades de texto plano");
+			return -1;
+		}
+		
+		memcpy(plainProbBuffer, plainProbabilities, ALPHA_SIZE * sizeof(double));
+		
+		calcularProbabilidades(strbuf, len, m, cipherProbBuffer,
+				intersectProbBuffer);
+				
+		for (i = 0; i < ALPHA_SIZE; i++) {
+			plainProbTotal[i] += plainProbabilities[i];
+			cipherProbTotal[i] += cipherProbBuffer[i];
+			for (j = 0; j < ALPHA_SIZE; j++) {
+				intersectProbTotal[i][j] += intersectProbBuffer[i][j];
+			}
+		}
+		
+		free(plainProbabilities);
+	}
+	
+	for (i = 0; i < ALPHA_SIZE; i++) {
+		
+		//if all but the last block are of equal length,
+		//probability can be easily adjusted as such:
+		//mean = (normal_block_size/total)*(sum of all but last block probs)
+		//		+ (last_block_size/total)*(last_block_prob) 
+		if (len != MAX_STR) {
+			plainProbTotal[i] -= plainProbBuffer[i];
+			plainProbTotal[i] *= MAX_STR/ftell(infile);
+			plainProbTotal[i] += plainProbBuffer[i] * (len/ftell(infile));
+		} else {
+			plainProbTotal[i] /= blocks;
+		}
+		
+		cipherProbTotal[i] /= blocks;
+		for (j = 0; j < ALPHA_SIZE; j++) {
+			intersectProbTotal[i][j] /= blocks;
+		}
+	}
+	
+	for (i = 0; i < ALPHA_SIZE; i++) {
+		fprintf(outfile, "P(%c) = %.3lf\n", 'A' + i, plainProbTotal[i]);
+	}
+	
+	for (i = 0; i < ALPHA_SIZE; i++) {
+		for (j = 0; j < ALPHA_SIZE; j++) {
+			if (cipherProbTotal[j] != 0) {
+				fprintf(outfile, "P(%c|%c) = %.3lf ", 'A' + i, 'A' + j,
+						intersectProbTotal[i][j]
+								/ cipherProbTotal[j]);
+			} else {
+				fprintf(outfile, "P(%c|%c) = 0.000 ", 'A' + i, 'A' + j);
+			}
+		}
+		fputc('\n', outfile);
+	}
+	
 	return 0;
 }

@@ -8,7 +8,7 @@
 #define MAX_STR 512
 #define ALPHA_SIZE 26
 
-enum MODO {EQUIPROBABLE, DISPAR};
+typedef enum MODO {EQUIPROBABLE, DISPAR} modo;
 
 extern char *optarg;
 extern int optind, opterr, optopt;
