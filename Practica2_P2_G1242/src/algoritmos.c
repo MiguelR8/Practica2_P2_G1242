@@ -71,14 +71,14 @@ void fitArray(char* array, int posEle, int arraySize) {
 }
 
 //disregarding all other characters
-double* getAlphabetProbabilities(char* text) {
+double* getAlphabetProbabilities(char* text, int len) {
 	int i, total;
 	double* l = (double*) calloc(ALPHA_SIZE, sizeof(double));
 	if (l == NULL) {
 		return NULL;
 	}
 	
-	for (i = 0; i < text[i] != '\0'; i++) {
+	for (i = 0, total = 0; i < len; i++) {
 		if (isalpha(text[i])) {
 			l[toupper(text[i]) - 'A']++;
 			total++;
@@ -88,4 +88,42 @@ double* getAlphabetProbabilities(char* text) {
 		l[i] = l[i]/((double)total);
 	}
 	return l;
+}
+
+double** getIntersectionAlphabetProbabilities (char* plaintext, long len, char* ciphertext) {
+	int i, j, total;
+	
+	double** ll = (double**) malloc(ALPHA_SIZE * sizeof(double*));
+	
+	if (ll == NULL) {
+		return NULL;
+	}
+	for (i = 0; i < ALPHA_SIZE; i++) {
+		ll[i] = (double*) calloc(ALPHA_SIZE, sizeof(double));
+		if (ll[i] == NULL) {
+			for (i--; i >= 0; i--) {
+				free(ll[1]);
+			}
+			free(ll);
+			return NULL;
+		}
+	}
+	
+	char x, y;
+	
+	for (i = 0, total = 0; i < len; i++) {
+		x = toupper(plaintext[i]);
+		y = toupper(ciphertext[i]);
+		if (isalpha(x) && isalpha(y)) {
+			ll[x - 'A'][y - 'A']++;
+			total++;
+		}
+	}
+	
+	for(i = 0; i <  ALPHA_SIZE; i++) {
+		for (j = 0; j < ALPHA_SIZE; j++) {
+			ll[i][j] /= total;
+		}
+	}
+	return ll;
 }

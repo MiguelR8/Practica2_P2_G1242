@@ -3,8 +3,10 @@
 #include <getopt.h>
 #include <ctype.h>
 #include <time.h>
+#include <string.h>
 
 #define MAX_STR 512
+#define ALPHA_SIZE 26
 
 enum MODO {EQUIPROBABLE, DISPAR};
 
@@ -14,7 +16,8 @@ extern int optind, opterr, optopt;
 void toUpperOnly(char* src);
 
 double average(int how_many, double* vals);
-double* getAlphabetProbabilities(char* text);
+double* getAlphabetProbabilities(char* text, int len);
+double** getIntersectionAlphabetProbabilities (char* plaintext, long len, char* ciphertext);
 
 // permutation functions
 int getRandomLessN(int n);
