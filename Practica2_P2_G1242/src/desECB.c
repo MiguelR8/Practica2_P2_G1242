@@ -3,6 +3,12 @@
 void char_to_bits(const char c, int* bits);
 void string_to_bits(const char* string, int* bits);
 void add_n_padding(const char* src, char* dst, int n_to_add);
+void left_shift_n(const int* array, int* array_shift, int n);
+void intcpy(int* dst, const int* src);
+void intncpy(int* dst, const int* src, int n);
+// Funciona con el numero 2 como fin de cadena
+int intlen(const int* array);
+void remove_parity_bits(int* src, int* dst);
 
 int main (int argc, char* argv[]) {
 	int c;
@@ -10,7 +16,7 @@ int main (int argc, char* argv[]) {
 	int modo = -1;
 	FILE* fin = NULL;
 	FILE* fout = NULL;
-	int k[DES_K_SIZE];
+	unsigned int k[DES_K_SIZE + 1]; // 64 bits y el numero 2 como fin de cadena
 	char aux_k[MAX_STR];
 	char strbuf[MAX_STR];
 	char* file_text = NULL;
@@ -57,6 +63,8 @@ int main (int argc, char* argv[]) {
 					printf("Error al pasar la cadena a bits\n");
 					return EXIT_FAILURE;
 				}
+
+				k[DES_K_SIZE + 1] = 2;
 				break;
 			case 'i':
 				fin = fopen(optarg, "rb");
@@ -211,3 +219,92 @@ void add_n_padding(const char* src, char* dst, int n_to_add) {
 	dst[i] = '\0';
 	return;
 }
+
+void left_shift_n(const int* array, int* array_shift, int n) {
+
+	if (!array || !array_shift)
+		return;
+
+	int aux_array[intlen(array) + 1];
+
+	// Copia a partir de la posicion n de array hasta el final en array_shift
+	intcpy(aux_array, array + n);
+	if (!aux_array)
+		return;
+
+	// Copia al final de array_shift los primeros n elementos de array
+	intncpy(aux_array + intlen(aux_array), array, n);
+	if (!aux_array)
+		return;
+
+	intcpy(array_shift, aux_array);
+}
+
+void intcpy(int* dst, const int* src) {
+
+	if (!dst || !src || sizeof(dst) < sizeof(src)) {
+		dst = NULL;
+		return;
+	}
+
+	int i;
+	int len = intlen(src);
+
+	for (i = 0; i < len; i++) {
+		dst[i] = src[i];
+	}
+
+	dst[i] = 2;
+
+	return;
+}
+
+void intncpy(int* dst, const int* src, int n) {
+
+	if (!dst || !src || sizeof(dst) < sizeof(src)) {
+		dst = NULL;
+		return;
+	}
+
+	int i;
+
+	for (i = 0; i < n; i++) {
+		dst[i] = src[i];
+	}
+
+	dst[i] = 2;
+
+	return;
+}
+
+int intlen(const int* array) {
+
+	if (!array)
+		return -1;
+
+	int i;
+
+	for (i = 0; array[i] != 2; i++);
+
+	return i;
+}
+
+void remove_parity_bits(int* src, int* dst) {
+
+	// 56bits cadena resultante + fin de cadena => 56 * sizeof(int) + sizeof(int)
+	if (!src || !dst) {
+		dst = NULL;
+		return;
+	}
+
+	/* 	Los bits de paridad ocuparan las posiciones:
+			8, 16, 24, 32, 40, 48, 56 y 64
+	*/
+	int i;
+	int j;
+
+	for (i = 0, j = 0; j < 64; i+=7, j+=8) {
+		intncpy(dst+i, src+j, 7);
+	}
+}
+

@@ -7,7 +7,7 @@
 
 #define MAX_STR 512
 #define ALPHA_SIZE 26
-#define DES_K_SIZE 64
+#define DES_K_SIZE 64 
 
 typedef enum MODO {EQUIPROBABLE, DISPAR, CIFRAR, DESCIFRAR} modo;
 
