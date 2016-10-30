@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <time.h>
 #include <string.h>
+#include <stdint.h>
 
 #define MAX_STR 512
 #define ALPHA_SIZE 26

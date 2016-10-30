@@ -8,10 +8,10 @@ LIB=lib/
 all: $(EXE1) $(EXE2)
 
 $(EXE1): $(SRC)$(EXE1).c $(SRC)algoritmos.c
-	$(CC) -g -o $(EXE1) $^
+	$(CC) --std=c99 -g -o $(EXE1) $^
 
 $(EXE2): $(SRC)$(EXE2).c $(SRC)algoritmos.c
-	$(CC) -g -o $(EXE2) $^
+	$(CC) --std=c99 -g -o $(EXE2) $^
 
 clean:
 	rm -f $(EXE1) $(EXE2)

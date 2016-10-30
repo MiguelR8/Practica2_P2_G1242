@@ -1,14 +1,14 @@
 #include "../includes/algoritmos.h"
 
-void char_to_bits(const char c, int* bits);
-void string_to_bits(const char* string, int* bits);
-void add_n_padding(const char* src, char* dst, int n_to_add);
-void left_shift_n(const int* array, int* array_shift, int n);
-void intcpy(int* dst, const int* src);
-void intncpy(int* dst, const int* src, int n);
+void char_to_bits  (const char c, uint8_t* bits);
+void string_to_bits(const char* string, uint8_t* bits);
+void add_n_padding (const char* src, char* dst, int n_to_add);
+void left_shift_n  (const uint8_t* array, uint8_t* array_shift, int n);
+void intcpy(uint8_t* dst, const uint8_t* src);
+void intncpy(uint8_t* dst, const uint8_t* src, int n);
 // Funciona con el numero 2 como fin de cadena
-int intlen(const int* array);
-void remove_parity_bits(int* src, int* dst);
+int intlen(const uint8_t* array);
+void remove_parity_bits(uint8_t* src, uint8_t* dst);
 
 int main (int argc, char* argv[]) {
 	int c;
@@ -16,7 +16,7 @@ int main (int argc, char* argv[]) {
 	int modo = -1;
 	FILE* fin = NULL;
 	FILE* fout = NULL;
-	unsigned int k[DES_K_SIZE + 1]; // 64 bits y el numero 2 como fin de cadena
+	uint8_t k[DES_K_SIZE + 1]; // 64 bits y el numero 2 como fin de cadena
 	char aux_k[MAX_STR];
 	char strbuf[MAX_STR];
 	char* file_text = NULL;
@@ -49,6 +49,8 @@ int main (int argc, char* argv[]) {
 					La longitud de la clave ha de ser de 64bits (8 char),
 					en caso contrario, se realiza padding
 				*/
+				//TODO: distinguir entre mayor que 8 (truncar o reportar error)
+				// y menor que 8 (añadir padding)
 				if (strlen(aux_k) != 8) {
 					add_n_padding(aux_k, aux_k, 8 - strlen(aux_k));
 
@@ -157,7 +159,7 @@ int main (int argc, char* argv[]) {
 	return 0;
 }
 
-void char_to_bits(const char c, int* bits) {
+void char_to_bits(const char c, uint8_t* bits) {
 
 	int i;
 	int j;
@@ -173,7 +175,7 @@ void char_to_bits(const char c, int* bits) {
 
 }
 
-void string_to_bits(const char* string, int* bits) {
+void string_to_bits(const char* string, uint8_t* bits) {
 
 	if (!string || !bits) {
 		bits = NULL;
@@ -184,7 +186,7 @@ void string_to_bits(const char* string, int* bits) {
 	int i;
 	int j;
 	int index;
-	int aux_bits[8];
+	uint8_t aux_bits[8];
 
 	len = strlen(string);
 	index = 0;
@@ -197,9 +199,10 @@ void string_to_bits(const char* string, int* bits) {
 		for (j = 0; j < 8; j++, index++) {
 			bits[index] = aux_bits[j];
 		}
-	}	
+	}
 }
 
+//TODO: cambiar(por que el relleno es A?): la clave no tiene por que ser alfabetica
 void add_n_padding(const char* src, char* dst, int n_to_add) {
 
 	if (!src || !dst || (sizeof(dst) + n_to_add) < (sizeof(src) + n_to_add)) {
@@ -220,12 +223,12 @@ void add_n_padding(const char* src, char* dst, int n_to_add) {
 	return;
 }
 
-void left_shift_n(const int* array, int* array_shift, int n) {
+void left_shift_n(const uint8_t* array, uint8_t* array_shift, int n) {
 
 	if (!array || !array_shift)
 		return;
 
-	int aux_array[intlen(array) + 1];
+	uint8_t aux_array[intlen(array) + 1];
 
 	// Copia a partir de la posicion n de array hasta el final en array_shift
 	intcpy(aux_array, array + n);
@@ -240,9 +243,9 @@ void left_shift_n(const int* array, int* array_shift, int n) {
 	intcpy(array_shift, aux_array);
 }
 
-void intcpy(int* dst, const int* src) {
+void intcpy(uint8_t* dst, const uint8_t* src) {
 
-	if (!dst || !src || sizeof(dst) < sizeof(src)) {
+	if (!dst || !src) {
 		dst = NULL;
 		return;
 	}
@@ -259,9 +262,9 @@ void intcpy(int* dst, const int* src) {
 	return;
 }
 
-void intncpy(int* dst, const int* src, int n) {
+void intncpy(uint8_t* dst, const uint8_t* src, int n) {
 
-	if (!dst || !src || sizeof(dst) < sizeof(src)) {
+	if (!dst || !src) {
 		dst = NULL;
 		return;
 	}
@@ -277,7 +280,7 @@ void intncpy(int* dst, const int* src, int n) {
 	return;
 }
 
-int intlen(const int* array) {
+int intlen(const uint8_t* array) {
 
 	if (!array)
 		return -1;
@@ -289,7 +292,7 @@ int intlen(const int* array) {
 	return i;
 }
 
-void remove_parity_bits(int* src, int* dst) {
+void remove_parity_bits(uint8_t* src, uint8_t* dst) {
 
 	// 56bits cadena resultante + fin de cadena => 56 * sizeof(int) + sizeof(int)
 	if (!src || !dst) {
