@@ -1,14 +1,23 @@
 #include "../includes/algoritmos.h"
+#include "../tables/DES_tables.c"
 
-void char_to_bits  (const char c, uint8_t* bits);
-void string_to_bits(const char* string, uint8_t* bits);
-void add_n_padding (const char* src, char* dst, int n_to_add);
-void left_shift_n  (const uint8_t* array, uint8_t* array_shift, int n);
-void intcpy(uint8_t* dst, const uint8_t* src);
-void intncpy(uint8_t* dst, const uint8_t* src, int n);
+int add_n_padding (const char* src, char* dst, int n_to_add);
+
+int intcpy(uint8_t* dst, const uint8_t* src);
+int intncpy(uint8_t* dst, const uint8_t* src, int n);
 // Funciona con el numero 2 como fin de cadena
 int intlen(const uint8_t* array);
-void remove_parity_bits(uint8_t* src, uint8_t* dst);
+int intcat(uint8_t* dst, const uint8_t* src);
+
+int rotatory_left_shift_n  (const uint8_t* array, uint8_t* array_shift, int n);
+int char_to_bits  (const char c, uint8_t* bits);
+int string_to_bits(const char* string, uint8_t* bits);
+int remove_parity_bits(const uint8_t* src, uint8_t* dst);
+
+int pc_1(const uint8_t* src, uint8_t* dst);
+int pc_2_and_contraction(const uint8_t* src, uint8_t* dst);
+int div_2_28bits (const uint8_t* src, uint8_t* c, uint8_t* d);
+int key_generator(const uint8_t* k, uint8_t** ks);
 
 int main (int argc, char* argv[]) {
 	int c;
@@ -16,10 +25,16 @@ int main (int argc, char* argv[]) {
 	int modo = -1;
 	FILE* fin = NULL;
 	FILE* fout = NULL;
-	uint8_t k[DES_K_SIZE + 1]; // 64 bits y el numero 2 como fin de cadena
-	char aux_k[MAX_STR];
+	uint8_t* k; 
+	char* aux_k;
 	char strbuf[MAX_STR];
 	char* file_text = NULL;
+
+	uint8_t** ks;
+	ks = (uint8_t **) malloc (17 * sizeof(uint8_t));
+	for(int i = 0; i < 17; i++) {
+		ks[i] = (uint8_t *)malloc(49 * sizeof(uint8_t));
+	}
 	
 	while (1) {
 		int option_index = 0;
@@ -44,29 +59,45 @@ int main (int argc, char* argv[]) {
 				modo = DESCIFRAR;
 				break;
 			case 'k':
+
+				aux_k = (char *) malloc ((strlen(optarg) + 1) * sizeof(char));
+				if (!aux_k) {
+					printf("Error al reservar memoria\n");
+					return EXIT_FAILURE;
+				}
+
 				strcpy(aux_k, optarg);
 				/*
 					La longitud de la clave ha de ser de 64bits (8 char),
 					en caso contrario, se realiza padding
 				*/
-				//TODO: distinguir entre mayor que 8 (truncar o reportar error)
-				// y menor que 8 (añadir padding)
 				if (strlen(aux_k) != 8) {
-					add_n_padding(aux_k, aux_k, 8 - strlen(aux_k));
-
-					if (!aux_k) {
-						printf("Error al añadir padding\n");
+					if (add_n_padding(aux_k, aux_k, 8 - strlen(aux_k)) < 0) {
+						printf("Error al añadir padding a la clave de entrada\n");
+						free(aux_k);
 						return EXIT_FAILURE;
 					}
 				}
 
-				string_to_bits(aux_k, k);
+				// 64 bits y el numero 2 como fin de cadena
+				k = (uint8_t *) malloc ((DES_K_SIZE + 1) * sizeof(uint8_t));
 				if (!k) {
+					printf("Error al reservar memoria.\n");
+					free(aux_k);
+					return EXIT_FAILURE;
+				}
+
+				if (string_to_bits(aux_k, k) < 0) {
 					printf("Error al pasar la cadena a bits\n");
+					free(aux_k);
+					free(k);
 					return EXIT_FAILURE;
 				}
 
 				k[DES_K_SIZE + 1] = 2;
+				free(aux_k);
+
+				key_generator(k, ks);
 				break;
 			case 'i':
 				fin = fopen(optarg, "rb");
@@ -109,6 +140,8 @@ int main (int argc, char* argv[]) {
 		if (fin != NULL) {
 			fclose(fin);
 		}
+
+		free(k);
 		return EXIT_FAILURE;
 	}
 	
@@ -156,31 +189,30 @@ int main (int argc, char* argv[]) {
 		fclose(fout);
 	}
 
-	return 0;
+	free(k);
+
+	return EXIT_SUCCESS;;
 }
 
-void char_to_bits(const char c, uint8_t* bits) {
+int char_to_bits(const char c, uint8_t* bits) {
 
 	int i;
 	int j;
 
-	if (!bits) {
-		bits = NULL;
-		return;
-	}
+	if (!bits)
+		return -1;
 
     for (i = 7, j = 0; i >= 0; --i, ++j) {
         bits[j] = ( (c & (1 << i)) ? 1 : 0 );
     }
 
+    return 0;
 }
 
-void string_to_bits(const char* string, uint8_t* bits) {
+int string_to_bits(const char* string, uint8_t* bits) {
 
-	if (!string || !bits) {
-		bits = NULL;
-		return;
-	}
+	if (!string || !bits)
+		return -1;
 
 	int len;
 	int i;
@@ -191,27 +223,27 @@ void string_to_bits(const char* string, uint8_t* bits) {
 	len = strlen(string);
 	index = 0;
 	for (i = 0; i < len; i++) {
-		char_to_bits(string[i], aux_bits);
-		if (!aux_bits) {
-			return;
-		}
+		if (char_to_bits(string[i], aux_bits) < 0)
+			return -1;
 
 		for (j = 0; j < 8; j++, index++) {
 			bits[index] = aux_bits[j];
 		}
 	}
+
+	return 0;
 }
 
-//TODO: cambiar(por que el relleno es A?): la clave no tiene por que ser alfabetica
-void add_n_padding(const char* src, char* dst, int n_to_add) {
+int add_n_padding(const char* src, char* dst, int n_to_add) {
 
-	if (!src || !dst || (sizeof(dst) + n_to_add) < (sizeof(src) + n_to_add)) {
-		dst = NULL;
-		return;
-	}
+	if (!src || !dst)
+		return -1;
 
 	int i;
 	int len = strlen(src);
+
+	if (len < 0)
+		return -1; 
 
 	strcpy(dst, src);
 
@@ -220,38 +252,40 @@ void add_n_padding(const char* src, char* dst, int n_to_add) {
 	}
 
 	dst[i] = '\0';
-	return;
+	return 0;
 }
 
-void left_shift_n(const uint8_t* array, uint8_t* array_shift, int n) {
+int rotatory_left_shift_n(const uint8_t* array, uint8_t* array_shift, int n) {
 
 	if (!array || !array_shift)
-		return;
+		return -1;
 
 	uint8_t aux_array[intlen(array) + 1];
 
 	// Copia a partir de la posicion n de array hasta el final en array_shift
-	intcpy(aux_array, array + n);
-	if (!aux_array)
-		return;
+	if (intcpy(aux_array, array + n) < 0)
+		return -1;
 
 	// Copia al final de array_shift los primeros n elementos de array
-	intncpy(aux_array + intlen(aux_array), array, n);
-	if (!aux_array)
-		return;
+	if (intncpy(aux_array + intlen(aux_array), array, n) < 0)
+		return -1;
 
-	intcpy(array_shift, aux_array);
+	if (intcpy(array_shift, aux_array) < 0)
+		return -1;
+
+	return 0;
 }
 
-void intcpy(uint8_t* dst, const uint8_t* src) {
+int intcpy(uint8_t* dst, const uint8_t* src) {
 
-	if (!dst || !src) {
-		dst = NULL;
-		return;
-	}
+	if (!dst || !src)
+		return -1;
 
 	int i;
 	int len = intlen(src);
+
+	if (len < 0)
+		return -1;
 
 	for (i = 0; i < len; i++) {
 		dst[i] = src[i];
@@ -259,15 +293,13 @@ void intcpy(uint8_t* dst, const uint8_t* src) {
 
 	dst[i] = 2;
 
-	return;
+	return 0;
 }
 
-void intncpy(uint8_t* dst, const uint8_t* src, int n) {
+int intncpy(uint8_t* dst, const uint8_t* src, int n) {
 
-	if (!dst || !src) {
-		dst = NULL;
-		return;
-	}
+	if (!dst || !src)
+		return -1;
 
 	int i;
 
@@ -277,7 +309,7 @@ void intncpy(uint8_t* dst, const uint8_t* src, int n) {
 
 	dst[i] = 2;
 
-	return;
+	return 0;
 }
 
 int intlen(const uint8_t* array) {
@@ -292,13 +324,22 @@ int intlen(const uint8_t* array) {
 	return i;
 }
 
-void remove_parity_bits(uint8_t* src, uint8_t* dst) {
+int intcat(uint8_t* dst, const uint8_t* src) {
+
+	if (!dst || !src)
+		return -1;
+
+	if (intcpy(dst + intlen(dst), src) < 0)
+		return -1;
+
+	return 0;
+}
+
+int remove_parity_bits(const uint8_t* src, uint8_t* dst) {
 
 	// 56bits cadena resultante + fin de cadena => 56 * sizeof(int) + sizeof(int)
-	if (!src || !dst) {
-		dst = NULL;
-		return;
-	}
+	if (!src || !dst)
+		return -1;
 
 	/* 	Los bits de paridad ocuparan las posiciones:
 			8, 16, 24, 32, 40, 48, 56 y 64
@@ -307,7 +348,138 @@ void remove_parity_bits(uint8_t* src, uint8_t* dst) {
 	int j;
 
 	for (i = 0, j = 0; j < 64; i+=7, j+=8) {
-		intncpy(dst+i, src+j, 7);
+		if (intncpy(dst+i, src+j, 7) < 0)
+			return -1;
 	}
+
+	return 0;
 }
 
+int pc_1(const uint8_t* src, uint8_t* dst) {
+
+	if (!src || !dst)
+		return -1;
+
+	int i;
+	uint8_t aux_src[intlen(src) + 1];
+
+	/* 	Para permitir que al llamar a la funcion, la variable src y
+		dst sean la misma, p.ej: pc_1(k, k)
+	*/
+	if (intcpy(aux_src, src) < 0)
+		return -1;
+
+	for (i = 0; i < BITS_IN_PC1; i++) {
+		dst[i] = aux_src[PC1[i]];
+	}
+
+	dst[i] = 2;
+	return 0;
+}
+
+int pc_2_and_contraction(const uint8_t* src, uint8_t* dst) {
+
+	if (!src || !dst)
+		return -1;
+
+	int i;
+	uint8_t aux_src[intlen(src) + 1];
+
+	//TODO: contraccion 56 -> 48 b
+
+	/* 	Para permitir que al llamar a la funcion, la variable src y
+		dst sean la misma, p.ej: pc_1(k, k)
+	*/
+	if (intcpy(aux_src, src) < 0)
+		return -1;
+
+	// La contraccion se realiza en el mismo bucle
+	for (i = 0; i < BITS_IN_PC2; i++) {
+		dst[i] = aux_src[PC2[i]];
+	}
+
+	dst[i] = 2;
+	return 0;
+}
+
+int div_2_28bits (const uint8_t* src, uint8_t* c, uint8_t* d) {
+
+	if (!src || !c || !d)
+		return -1;
+
+	if (intncpy(c, src, 28) < 0)
+		return -1;
+
+	if (intncpy(d, src + 28, 28) < 0)
+		return -1;
+
+	return 0;
+}
+
+int key_generator(const uint8_t* k, uint8_t** ks) {
+
+	if (!k || !ks)
+		return -1;
+
+	int i;
+	uint8_t k_wop[57];	// k without parity bits => 56 + fin de cadena (numero 2)
+	uint8_t k_wop_permuted[57];
+	uint8_t c[29];
+	uint8_t d[29];
+	uint8_t cat_c_d[57];
+	uint8_t aux_k[49];
+
+	if (remove_parity_bits(k, k_wop) < 0)
+		return -1;
+
+	if (pc_1(k_wop, k_wop_permuted) < 0)
+		return -1;
+
+	// C0 y D0
+	if (div_2_28bits(k_wop_permuted, c, d) < 0)
+		return -1;
+
+	// C1
+	if (rotatory_left_shift_n(c, c, ROUND_SHIFTS[0]) < 0)
+	 	return -1;
+
+	// D1
+	if (rotatory_left_shift_n(d, d, ROUND_SHIFTS[0]) < 0)
+	 	return -1;
+
+	if (intcpy(cat_c_d, c) < 0)
+		return -1;
+
+	if (intcat(cat_c_d, d) < 0)
+		return -1;
+
+	// K1
+	if (pc_2_and_contraction(aux_k, cat_c_d) < 0)
+		return -1;
+
+	ks[0] = aux_k;
+
+	for (i = 1; i < ROUNDS; i++) {
+		// Cn
+		if (rotatory_left_shift_n(c, c, ROUND_SHIFTS[i]) < 0)
+		 	return -1;
+
+		// Dn
+		if (rotatory_left_shift_n(d, d, ROUND_SHIFTS[i]) < 0)
+		 	return -1;
+
+		if (intcpy(cat_c_d, c) < 0)
+			return -1;
+
+		if (intcat(cat_c_d, d) < 0)
+			return -1;
+
+		// Kn
+		if (pc_2_and_contraction(aux_k, cat_c_d) < 0)
+			return -1;
+
+		ks[i] = aux_k;
+	}
+
+	return 0;
+}
