@@ -276,7 +276,6 @@ int calcularProbabilidadesFichero(FILE* infile, FILE* outfile, modo m) {
 	char strbuf[MAX_STR];
 	int len = 0;
 	double plainProbTotal[ALPHA_SIZE];
-	double plainProbBuffer[ALPHA_SIZE];
 	double cipherProbBuffer[ALPHA_SIZE];
 	double cipherProbTotal[ALPHA_SIZE];
 	double intersectProbBuffer[ALPHA_SIZE][ALPHA_SIZE];
@@ -287,27 +286,30 @@ int calcularProbabilidadesFichero(FILE* infile, FILE* outfile, modo m) {
 	memset(cipherProbTotal, 0, ALPHA_SIZE * sizeof(double));
 	memset(intersectProbTotal, 0, ALPHA_SIZE * ALPHA_SIZE * sizeof(double));
 	
-	int i, j, blocks;
+	int i, j, chars;
 	
-	for(blocks = 0; !feof(infile) && !ferror(infile); blocks++) {
-		len = fread(strbuf, sizeof(char), MAX_STR, infile);
+	for(chars = 0; !feof(infile) && !ferror(infile); chars += len) {
+		
+		memset(strbuf, 0, MAX_STR);
+		fread(strbuf, sizeof(char), MAX_STR, infile);
+		toUpperOnly(strbuf),
+		len = strlen(strbuf);
+		strbuf[len] = '\0';
 		
 		plainProbabilities = getAlphabetProbabilities(strbuf, len);
 		if (plainProbabilities == NULL) {
 			perror("Al obtener la tabla de probabilidades de texto plano");
 			return -1;
 		}
-		
-		memcpy(plainProbBuffer, plainProbabilities, ALPHA_SIZE * sizeof(double));
-		
 		calcularProbabilidades(strbuf, len, m, cipherProbBuffer,
 				intersectProbBuffer);
 				
 		for (i = 0; i < ALPHA_SIZE; i++) {
-			plainProbTotal[i] += plainProbabilities[i];
-			cipherProbTotal[i] += cipherProbBuffer[i];
+			//probabilities should be later divided by the total text length
+			plainProbTotal[i] += plainProbabilities[i] * len;
+			cipherProbTotal[i] += cipherProbBuffer[i] * len;
 			for (j = 0; j < ALPHA_SIZE; j++) {
-				intersectProbTotal[i][j] += intersectProbBuffer[i][j];
+				intersectProbTotal[i][j] += intersectProbBuffer[i][j] * len;
 			}
 		}
 		
@@ -316,40 +318,35 @@ int calcularProbabilidadesFichero(FILE* infile, FILE* outfile, modo m) {
 	
 	for (i = 0; i < ALPHA_SIZE; i++) {
 		
-		//if all but the last block are of equal length,
-		//probability can be easily adjusted as such:
-		//mean = (normal_block_size/total)*(sum of all but last block probs)
-		//		+ (last_block_size/total)*(last_block_prob) 
-		if (len != MAX_STR) {
-			plainProbTotal[i] -= plainProbBuffer[i];
-			plainProbTotal[i] *= MAX_STR/ftell(infile);
-			plainProbTotal[i] += plainProbBuffer[i] * (len/ftell(infile));
-		} else {
-			plainProbTotal[i] /= blocks;
-		}
+		plainProbTotal[i] /= chars;
 		
-		cipherProbTotal[i] /= blocks;
+		cipherProbTotal[i] /= chars;
 		for (j = 0; j < ALPHA_SIZE; j++) {
-			intersectProbTotal[i][j] /= blocks;
+			intersectProbTotal[i][j] /= chars;
 		}
 	}
 	
 	for (i = 0; i < ALPHA_SIZE; i++) {
 		fprintf(outfile, "P(%c) = %.3lf\n", 'A' + i, plainProbTotal[i]);
 	}
-	
+	puts("|||");
 	for (i = 0; i < ALPHA_SIZE; i++) {
 		for (j = 0; j < ALPHA_SIZE; j++) {
-			if (cipherProbTotal[j] != 0) {
+			if (j != 0) {
+				intersectProbTotal[i][0] += intersectProbTotal[i][j];
+			}
+			/*if (cipherProbTotal[j] != 0) {
 				fprintf(outfile, "P(%c|%c) = %.3lf ", 'A' + i, 'A' + j,
 						intersectProbTotal[i][j]
 								/ cipherProbTotal[j]);
 			} else {
 				fprintf(outfile, "P(%c|%c) = 0.000 ", 'A' + i, 'A' + j);
-			}
+			}*/
 		}
+		fprintf(outfile, "P(%c) = %.3lf ", 'A' + i,
+					intersectProbTotal[i][0]);
 		fputc('\n', outfile);
 	}
-	
+	puts("------");
 	return 0;
 }
