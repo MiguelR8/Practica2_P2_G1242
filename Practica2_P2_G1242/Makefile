@@ -11,7 +11,7 @@ $(EXE1): $(SRC)$(EXE1).c $(SRC)algoritmos.c
 	$(CC) --std=c99 -g -o $(EXE1) $^
 
 $(EXE2): $(SRC)$(EXE2).c $(SRC)algoritmos.c
-	$(CC) --std=c99 -g -o $(EXE2) $^
+	$(CC) --std=c99 -g -o $(EXE2) $^ -lm
 
 clean:
 	rm -f $(EXE1) $(EXE2)

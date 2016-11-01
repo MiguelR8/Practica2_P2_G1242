@@ -1,5 +1,6 @@
 #include "../includes/algoritmos.h"
 #include "../tables/DES_tables.c"
+#include <math.h>
 
 int add_n_padding (const char* src, char* dst, int n_to_add);
 
@@ -12,12 +13,18 @@ int intcat(uint8_t* dst, const uint8_t* src);
 int rotatory_left_shift_n  (const uint8_t* array, uint8_t* array_shift, int n);
 int char_to_bits  (const char c, uint8_t* bits);
 int string_to_bits(const char* string, uint8_t* bits);
-int remove_parity_bits(const uint8_t* src, uint8_t* dst);
+int xor(uint8_t* dst, const uint8_t* a, const uint8_t* b);
+int convertBinaryToDecimal(const uint8_t* n);
+int convertDecimalToBinary(const int dec, uint8_t* bits, int num_bits);
+//int remove_parity_bits(const uint8_t* src, uint8_t* dst);
 
-int pc_1(const uint8_t* src, uint8_t* dst);
-int pc_2_and_contraction(const uint8_t* src, uint8_t* dst);
-int div_2_28bits (const uint8_t* src, uint8_t* c, uint8_t* d);
+int pc_1(const uint8_t* src, uint8_t* c, uint8_t* d);
+int pc_2(const uint8_t* src, uint8_t* dst);
+//int div_2_28bits (const uint8_t* src, uint8_t* c, uint8_t* d);
 int key_generator(const uint8_t* k, uint8_t** ks);
+int expansion(const uint8_t* src, uint8_t* dst);
+int permutation(const uint8_t* src, uint8_t* dst);
+int sustitution(const uint8_t* r, const uint8_t* k, uint8_t* output);
 
 int main (int argc, char* argv[]) {
 	int c;
@@ -96,8 +103,6 @@ int main (int argc, char* argv[]) {
 
 				k[DES_K_SIZE + 1] = 2;
 				free(aux_k);
-
-				key_generator(k, ks);
 				break;
 			case 'i':
 				fin = fopen(optarg, "rb");
@@ -355,47 +360,34 @@ int remove_parity_bits(const uint8_t* src, uint8_t* dst) {
 	return 0;
 }
 
-int pc_1(const uint8_t* src, uint8_t* dst) {
+int xor(uint8_t* dst, const uint8_t* a, const uint8_t* b) {
 
-	if (!src || !dst)
+	if (!dst || !a || !b || intlen(a) != intlen(b))
 		return -1;
 
 	int i;
-	uint8_t aux_src[intlen(src) + 1];
 
-	/* 	Para permitir que al llamar a la funcion, la variable src y
-		dst sean la misma, p.ej: pc_1(k, k)
-	*/
-	if (intcpy(aux_src, src) < 0)
-		return -1;
+	/* 	Permite que dst y a o dst y b sean la misma variable al
+	 	llamar a la funcion, p.ej. xor(a, a, b) */
+	if (dst == a) {
+		uint8_t aux_a[intlen(a) + 1];
 
-	for (i = 0; i < BITS_IN_PC1; i++) {
-		dst[i] = aux_src[PC1[i]];
-	}
+		if (intcpy(aux_a, a) < 0)
+			return -1;
 
-	dst[i] = 2;
-	return 0;
-}
+		for (i = 0; i < intlen(a); i++) {
+			dst[i] = aux_a[i] ^ b [i];
+		}
 
-int pc_2_and_contraction(const uint8_t* src, uint8_t* dst) {
+	} else if (dst == b) {
+		uint8_t aux_b[intlen(b) + 1];
 
-	if (!src || !dst)
-		return -1;
+		if (intcpy(aux_b, b) < 0)
+			return -1;
 
-	int i;
-	uint8_t aux_src[intlen(src) + 1];
-
-	//TODO: contraccion 56 -> 48 b
-
-	/* 	Para permitir que al llamar a la funcion, la variable src y
-		dst sean la misma, p.ej: pc_1(k, k)
-	*/
-	if (intcpy(aux_src, src) < 0)
-		return -1;
-
-	// La contraccion se realiza en el mismo bucle
-	for (i = 0; i < BITS_IN_PC2; i++) {
-		dst[i] = aux_src[PC2[i]];
+		for (i = 0; i < intlen(a); i++) {
+			dst[i] = a[i] ^ aux_b [i];
+		}
 	}
 
 	dst[i] = 2;
@@ -416,27 +408,58 @@ int div_2_28bits (const uint8_t* src, uint8_t* c, uint8_t* d) {
 	return 0;
 }
 
+int pc_1(const uint8_t* src, uint8_t* c, uint8_t* d) {
+
+	if (!src || !c || !d)
+		return -1;
+
+	int i;
+	int j = 0;
+
+	for (i = 0; i < BITS_IN_PC1/2; i++, j++) {
+		c[i] = src[PC1[j] - 1];
+	}
+
+	c[i] = 2;
+
+	for (i = 0; i < BITS_IN_PC1/2; i++, j++) {
+		d[i] = src[PC1[j] - 1];
+	}
+
+	d[i] = 2;
+
+	return 0;
+}
+
+int pc_2(const uint8_t* src, uint8_t* dst) {
+
+	if (!src || !dst)
+		return -1;
+
+	int i;
+
+	// La contraccion se realiza en el mismo bucle
+	for (i = 0; i < BITS_IN_PC2; i++) {
+		dst[i] = src[PC2[i] - 1];
+	}
+
+	dst[i] = 2;
+	return 0;
+}
+
 int key_generator(const uint8_t* k, uint8_t** ks) {
 
 	if (!k || !ks)
 		return -1;
 
 	int i;
-	uint8_t k_wop[57];	// k without parity bits => 56 + fin de cadena (numero 2)
-	uint8_t k_wop_permuted[57];
 	uint8_t c[29];
 	uint8_t d[29];
 	uint8_t cat_c_d[57];
 	uint8_t aux_k[49];
 
-	if (remove_parity_bits(k, k_wop) < 0)
-		return -1;
-
-	if (pc_1(k_wop, k_wop_permuted) < 0)
-		return -1;
-
 	// C0 y D0
-	if (div_2_28bits(k_wop_permuted, c, d) < 0)
+	if (pc_1(k, c, d) < 0)
 		return -1;
 
 	// C1
@@ -447,6 +470,7 @@ int key_generator(const uint8_t* k, uint8_t** ks) {
 	if (rotatory_left_shift_n(d, d, ROUND_SHIFTS[0]) < 0)
 	 	return -1;
 
+	// Se concatenan c y d para pasar por PC2
 	if (intcpy(cat_c_d, c) < 0)
 		return -1;
 
@@ -454,7 +478,7 @@ int key_generator(const uint8_t* k, uint8_t** ks) {
 		return -1;
 
 	// K1
-	if (pc_2_and_contraction(aux_k, cat_c_d) < 0)
+	if (pc_2(cat_c_d, aux_k) < 0)
 		return -1;
 
 	ks[0] = aux_k;
@@ -475,7 +499,7 @@ int key_generator(const uint8_t* k, uint8_t** ks) {
 			return -1;
 
 		// Kn
-		if (pc_2_and_contraction(aux_k, cat_c_d) < 0)
+		if (pc_2(cat_c_d, aux_k) < 0)
 			return -1;
 
 		ks[i] = aux_k;
@@ -483,3 +507,149 @@ int key_generator(const uint8_t* k, uint8_t** ks) {
 
 	return 0;
 }
+
+int expansion(const uint8_t* src, uint8_t* dst) {
+
+	if (!src || !dst)
+		return -1;
+
+	int i;
+
+	for (i = 0; i < BITS_IN_E; i++) {
+		dst[i] = src[E[i] - 1];
+	}
+
+	dst[i] = 2;
+	return 0;
+}
+
+int permutation(const uint8_t* src, uint8_t* dst) {
+
+	if (!src || !dst)
+		return -1;
+
+	int i;
+	uint8_t aux_src[intlen(src) + 1];
+
+	/* 	Permite que src y dst sean la misma variable al
+	 	llamar a la funcion, p.ej. permutation(src, src) */
+	if (intcpy(aux_src, src) < 0)
+		return -1;
+
+	for (i = 0; i < BITS_IN_P; i++) {
+		dst[i] = aux_src[P[i] - 1];
+	}
+
+	dst[i] = 2;
+	return 0;
+}
+
+int sustitution(const uint8_t* r, const uint8_t* k, uint8_t* output) {
+
+	if (!r || !k || !output)
+		return -1;
+
+	int i;
+	int j = 0;
+	int row;
+	int column;
+	int index;
+	uint8_t bits[NUM_S_BOXES][5];
+	uint8_t row_bits[3];
+	uint8_t column_bits[5];
+	uint8_t exp[49];
+	uint8_t bits_per_box[NUM_S_BOXES][7];
+	uint8_t after_sustitution[33];
+
+	if (expansion(r, exp) < 0)
+		return -1;
+
+	if (xor(exp, exp, k) < 0)
+		return -1;
+
+	/* 	Divide el resultador de exp XOR k en bloques de 6 bits
+		para realizar la sustitucion con las S-BOXES
+	*/
+	for (i = 0; i < strlen(exp); i++) {
+		bits_per_box[j][i] = exp[i];
+
+		if (!(i % 6))
+			j++;
+	}
+
+	// Realiza la sustitucion con las S-BOXES
+	for (i = 0; i < NUM_S_BOXES; i++) {
+		row_bits[0] = bits_per_box[i][0];
+		row_bits[1] = bits_per_box[i][5];
+		row_bits[2] = 2;
+
+		column_bits[0] = bits_per_box[i][1];
+		column_bits[1] = bits_per_box[i][2];
+		column_bits[2] = bits_per_box[i][3];
+		column_bits[3] = bits_per_box[i][4];
+		column_bits[4] = 2;
+
+		row = convertBinaryToDecimal(row_bits);
+		column = convertBinaryToDecimal(column_bits);
+
+		if (row < 0 || column < 0)
+			return -1;
+
+		if (convertDecimalToBinary(S_BOXES[i][row][column], bits[i], 4) < 0)
+			return -1;
+	}
+
+	// Pasamos el resultado de la sustitucion a un unico array
+	for (i = 0, index = 0; i < NUM_S_BOXES; ++i) {
+		for (j = 0; j < 4; ++j, ++index) {
+			after_sustitution[index] = bits[i][j];
+		}
+	}
+
+	if (permutation(after_sustitution, output) < 0)
+		return -1;
+
+	return 0;
+}
+
+int convertBinaryToDecimal(const uint8_t* n) {
+
+	if (!n)
+		return -1;
+
+	int i;
+	int j;
+	int remainder;
+	int decimalNumber = 0;
+
+    for (i = (intlen(n) - 1), j = 0; i >= 0; i--, j++) {
+        decimalNumber += n[i] * pow(2, j);
+    }
+
+    return decimalNumber;
+}
+
+/* 	num_bits indica el numero de bits con los que se quiere representar
+ 	el numero decimal, p.ej: dec = 100 y num_bits = 16 => 
+ 	bits = 00000000 01100100
+ */
+int convertDecimalToBinary(const int dec, uint8_t* bits, int num_bits) {
+
+	if (!bits)
+		return -1;
+
+	int i;
+	int tempDec = dec;
+
+	for (i = (num_bits - 1); i >= 0; --i) {
+		if (tempDec) {
+			bits[i] = tempDec  % 2;
+			tempDec /= 2;
+		} else
+			bits[i] = 0;
+	}
+
+	bits[num_bits] = 2;
+	return 0;
+}
+
