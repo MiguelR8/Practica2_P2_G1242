@@ -1,14 +1,37 @@
 #include "../includes/algoritmos.h"
+#include "../tables/DES_tables.c"
+#include <math.h>
 
-void char_to_bits  (const char c, uint8_t* bits);
-void string_to_bits(const char* string, uint8_t* bits);
-void add_n_padding (const char* src, char* dst, int n_to_add);
-void left_shift_n  (const uint8_t* array, uint8_t* array_shift, int n);
-void intcpy(uint8_t* dst, const uint8_t* src);
-void intncpy(uint8_t* dst, const uint8_t* src, int n);
+int add_n_padding (const char* src, char* dst, int n_to_add);
+
+int intcpy(uint8_t* dst, const uint8_t* src);
+int intncpy(uint8_t* dst, const uint8_t* src, int n);
 // Funciona con el numero 2 como fin de cadena
 int intlen(const uint8_t* array);
-void remove_parity_bits(uint8_t* src, uint8_t* dst);
+int intcat(uint8_t* dst, const uint8_t* src);
+
+int rotatory_left_shift_n  (const uint8_t* array, uint8_t* array_shift, int n);
+int char_to_bits  (const char c, uint8_t* bits);
+int bits_to_char(const uint8_t* bits);
+int string_to_bits(const char* string, uint8_t* bits);
+int bits_to_string(const uint8_t* bits, char* string);
+int xor(uint8_t* dst, const uint8_t* a, const uint8_t* b);
+int convertBinaryToDecimal(const uint8_t* n);
+int convertDecimalToBinary(const int dec, uint8_t* bits, int num_bits);
+//int remove_parity_bits(const uint8_t* src, uint8_t* dst);
+
+int pc_1(const uint8_t* src, uint8_t* c, uint8_t* d);
+int pc_2(const uint8_t* src, uint8_t* dst);
+//int div_2_28bits (const uint8_t* src, uint8_t* c, uint8_t* d);
+int key_generator(const uint8_t* k, uint8_t** ks);
+int expansion(const uint8_t* src, uint8_t* dst);
+int permutation(const uint8_t* src, uint8_t* dst);
+int function_f(const uint8_t* r, const uint8_t* k, uint8_t* output);
+int initial_permutation(const uint8_t* src, uint8_t* l, uint8_t* r);
+int initial_permutation_inv(const uint8_t* l, const uint8_t* r, uint8_t* dst);
+
+int cipher(uint8_t* input, uint8_t* output, uint8_t* k);
+int decipher(uint8_t* input, uint8_t* output, uint8_t* k);
 
 int main (int argc, char* argv[]) {
 	int c;
@@ -16,8 +39,10 @@ int main (int argc, char* argv[]) {
 	int modo = -1;
 	FILE* fin = NULL;
 	FILE* fout = NULL;
-	uint8_t k[DES_K_SIZE + 1]; // 64 bits y el numero 2 como fin de cadena
-	char aux_k[MAX_STR];
+	uint8_t* k;
+	uint8_t* input;
+	uint8_t* output;
+	char* aux_k;
 	char strbuf[MAX_STR];
 	char* file_text = NULL;
 	
@@ -44,29 +69,41 @@ int main (int argc, char* argv[]) {
 				modo = DESCIFRAR;
 				break;
 			case 'k':
+				aux_k = (char *) malloc ((strlen(optarg) + 1) * sizeof(char));
+				if (!aux_k) {
+					printf("Error al reservar memoria\n");
+					return EXIT_FAILURE;
+				}
+
 				strcpy(aux_k, optarg);
 				/*
 					La longitud de la clave ha de ser de 64bits (8 char),
 					en caso contrario, se realiza padding
 				*/
-				//TODO: distinguir entre mayor que 8 (truncar o reportar error)
-				// y menor que 8 (añadir padding)
 				if (strlen(aux_k) != 8) {
-					add_n_padding(aux_k, aux_k, 8 - strlen(aux_k));
-
-					if (!aux_k) {
-						printf("Error al añadir padding\n");
+					if (add_n_padding(aux_k, aux_k, 8 - strlen(aux_k)) < 0) {
+						printf("Error al añadir padding a la clave de entrada\n");
+						free(aux_k);
 						return EXIT_FAILURE;
 					}
 				}
 
-				string_to_bits(aux_k, k);
+				// 64 bits y el numero 2 como fin de cadena
+				k = (uint8_t *) malloc ((DES_K_SIZE + 1) * sizeof(uint8_t));
 				if (!k) {
-					printf("Error al pasar la cadena a bits\n");
+					printf("Error al reservar memoria.\n");
+					free(aux_k);
 					return EXIT_FAILURE;
 				}
 
-				k[DES_K_SIZE + 1] = 2;
+				if (string_to_bits(aux_k, k) < 0) {
+					printf("Error al pasar la cadena a bits\n");
+					free(aux_k);
+					free(k);
+					return EXIT_FAILURE;
+				}
+
+				free(aux_k);
 				break;
 			case 'i':
 				fin = fopen(optarg, "rb");
@@ -109,6 +146,8 @@ int main (int argc, char* argv[]) {
 		if (fin != NULL) {
 			fclose(fin);
 		}
+
+		free(k);
 		return EXIT_FAILURE;
 	}
 	
@@ -141,7 +180,42 @@ int main (int argc, char* argv[]) {
 		if (modo == CIFRAR) {
 			toUpperOnly(strbuf);
 			len = strlen(strbuf);
-			//TODO: añadir funcion de cifrado
+
+			input = (uint8_t *) malloc (((8 * len) + 2) * sizeof(uint8_t));
+			if (!input) {
+				free(k);
+				return EXIT_FAILURE;
+			}
+
+			output = (uint8_t *) malloc (((8 * len) + 2) * sizeof(uint8_t));
+			if (!output) {
+				free(k);
+				free(input);
+				return EXIT_FAILURE;
+			}
+
+			if (string_to_bits(strbuf, input) < 0) {
+				free(k);
+				free(input);
+				free(output);
+				return EXIT_FAILURE;
+			}
+			
+			if (cipher(input, output, k) < 0) {
+				free(k);
+				free(input);
+				free(output);
+				return EXIT_FAILURE;
+			}
+
+			if (bits_to_string(output, strbuf) < 0) {
+				free(k);
+				free(input);
+				free(output);
+				return EXIT_FAILURE;
+			}
+
+			fwrite(strbuf, len, sizeof(char), fout);
 
 		} else {
 			//TODO: añadir funcion de descifrado
@@ -156,62 +230,82 @@ int main (int argc, char* argv[]) {
 		fclose(fout);
 	}
 
-	return 0;
+	free(k);
+
+	return EXIT_SUCCESS;;
 }
 
-void char_to_bits(const char c, uint8_t* bits) {
+int char_to_bits(const char c, uint8_t* bits) {
 
-	int i;
-	int j;
-
-	if (!bits) {
-		bits = NULL;
-		return;
-	}
-
-    for (i = 7, j = 0; i >= 0; --i, ++j) {
-        bits[j] = ( (c & (1 << i)) ? 1 : 0 );
-    }
-
+	return convertDecimalToBinary(c, bits, 8);
 }
 
-void string_to_bits(const char* string, uint8_t* bits) {
+int bits_to_char(const uint8_t* bits) {
 
-	if (!string || !bits) {
-		bits = NULL;
-		return;
-	}
+	return convertBinaryToDecimal(bits);
+}
+
+int string_to_bits(const char* string, uint8_t* bits) {
+
+	if (!string || !bits)
+		return -1;
 
 	int len;
 	int i;
 	int j;
 	int index;
-	uint8_t aux_bits[8];
+	uint8_t aux_bits[9];
 
 	len = strlen(string);
 	index = 0;
 	for (i = 0; i < len; i++) {
-		char_to_bits(string[i], aux_bits);
-		if (!aux_bits) {
-			return;
-		}
+		if (char_to_bits(string[i], aux_bits) < 0)
+			return -1;
 
 		for (j = 0; j < 8; j++, index++) {
 			bits[index] = aux_bits[j];
 		}
 	}
+
+	bits[index] = 2;
+
+	return 0;
 }
 
-//TODO: cambiar(por que el relleno es A?): la clave no tiene por que ser alfabetica
-void add_n_padding(const char* src, char* dst, int n_to_add) {
+int bits_to_string(const uint8_t* bits, char* string) {
 
-	if (!src || !dst || (sizeof(dst) + n_to_add) < (sizeof(src) + n_to_add)) {
-		dst = NULL;
-		return;
+	if (!string || !bits)
+		return -1;
+
+	int i;
+	int j;
+	int index = 0;
+	int len = intlen(bits);
+	uint8_t aux_bits[9];
+
+	for (i = 0, j = 0; i < len; i++) {
+		aux_bits[j] = bits[i];
+		j++;
+
+		if (i && !(i % 7)) {
+			aux_bits[8] = 2;
+			string[index] = bits_to_char(aux_bits);
+			j = 0;
+			index++;
+		}
 	}
+}
+
+int add_n_padding(const char* src, char* dst, int n_to_add) {
+
+	if (!src || !dst)
+		return -1;
 
 	int i;
 	int len = strlen(src);
+
+	if (len < 0)
+		return -1; 
 
 	strcpy(dst, src);
 
@@ -220,38 +314,40 @@ void add_n_padding(const char* src, char* dst, int n_to_add) {
 	}
 
 	dst[i] = '\0';
-	return;
+	return 0;
 }
 
-void left_shift_n(const uint8_t* array, uint8_t* array_shift, int n) {
+int rotatory_left_shift_n(const uint8_t* array, uint8_t* array_shift, int n) {
 
 	if (!array || !array_shift)
-		return;
+		return -1;
 
 	uint8_t aux_array[intlen(array) + 1];
 
 	// Copia a partir de la posicion n de array hasta el final en array_shift
-	intcpy(aux_array, array + n);
-	if (!aux_array)
-		return;
+	if (intcpy(aux_array, array + n) < 0)
+		return -1;
 
 	// Copia al final de array_shift los primeros n elementos de array
-	intncpy(aux_array + intlen(aux_array), array, n);
-	if (!aux_array)
-		return;
+	if (intncpy(aux_array + intlen(aux_array), array, n) < 0)
+		return -1;
 
-	intcpy(array_shift, aux_array);
+	if (intcpy(array_shift, aux_array) < 0)
+		return -1;
+
+	return 0;
 }
 
-void intcpy(uint8_t* dst, const uint8_t* src) {
+int intcpy(uint8_t* dst, const uint8_t* src) {
 
-	if (!dst || !src) {
-		dst = NULL;
-		return;
-	}
+	if (!dst || !src)
+		return -1;
 
 	int i;
 	int len = intlen(src);
+
+	if (len < 0)
+		return -1;
 
 	for (i = 0; i < len; i++) {
 		dst[i] = src[i];
@@ -259,15 +355,13 @@ void intcpy(uint8_t* dst, const uint8_t* src) {
 
 	dst[i] = 2;
 
-	return;
+	return 0;
 }
 
-void intncpy(uint8_t* dst, const uint8_t* src, int n) {
+int intncpy(uint8_t* dst, const uint8_t* src, int n) {
 
-	if (!dst || !src) {
-		dst = NULL;
-		return;
-	}
+	if (!dst || !src)
+		return -1;
 
 	int i;
 
@@ -277,7 +371,7 @@ void intncpy(uint8_t* dst, const uint8_t* src, int n) {
 
 	dst[i] = 2;
 
-	return;
+	return 0;
 }
 
 int intlen(const uint8_t* array) {
@@ -292,13 +386,22 @@ int intlen(const uint8_t* array) {
 	return i;
 }
 
-void remove_parity_bits(uint8_t* src, uint8_t* dst) {
+int intcat(uint8_t* dst, const uint8_t* src) {
+
+	if (!dst || !src)
+		return -1;
+
+	if (intcpy(dst + intlen(dst), src) < 0)
+		return -1;
+
+	return 0;
+}
+
+int remove_parity_bits(const uint8_t* src, uint8_t* dst) {
 
 	// 56bits cadena resultante + fin de cadena => 56 * sizeof(int) + sizeof(int)
-	if (!src || !dst) {
-		dst = NULL;
-		return;
-	}
+	if (!src || !dst)
+		return -1;
 
 	/* 	Los bits de paridad ocuparan las posiciones:
 			8, 16, 24, 32, 40, 48, 56 y 64
@@ -307,7 +410,481 @@ void remove_parity_bits(uint8_t* src, uint8_t* dst) {
 	int j;
 
 	for (i = 0, j = 0; j < 64; i+=7, j+=8) {
-		intncpy(dst+i, src+j, 7);
+		if (intncpy(dst+i, src+j, 7) < 0)
+			return -1;
 	}
+
+	return 0;
 }
 
+int xor(uint8_t* dst, const uint8_t* a, const uint8_t* b) {
+
+	if (!dst || !a || !b)
+		return -1;
+
+	int i;
+
+	/* 	Permite que dst y a o dst y b sean la misma variable al
+	 	llamar a la funcion, p.ej. xor(a, a, b) */
+	if (dst == a) {
+		uint8_t aux_a[intlen(a) + 1];
+
+		if (intcpy(aux_a, a) < 0)
+			return -1;
+
+		for (i = 0; i < intlen(aux_a); i++) {
+			dst[i] = aux_a[i] ^ b [i];
+		}
+
+	} else if (dst == b) {
+		uint8_t aux_b[intlen(b) + 1];
+
+		if (intcpy(aux_b, b) < 0)
+			return -1;
+
+		for (i = 0; i < intlen(aux_b); i++) {
+			dst[i] = a[i] ^ aux_b [i];
+		}
+	}
+
+	dst[i] = 2;
+	return 0;
+}
+
+int div_2_28bits (const uint8_t* src, uint8_t* c, uint8_t* d) {
+
+	if (!src || !c || !d)
+		return -1;
+
+	if (intncpy(c, src, 28) < 0)
+		return -1;
+
+	if (intncpy(d, src + 28, 28) < 0)
+		return -1;
+
+	return 0;
+}
+
+int pc_1(const uint8_t* src, uint8_t* c, uint8_t* d) {
+
+	if (!src || !c || !d)
+		return -1;
+
+	int i;
+	int j = 0;
+
+	for (i = 0; i < BITS_IN_PC1/2; i++, j++) {
+		c[i] = src[PC1[j] - 1];
+	}
+
+	c[i] = 2;
+
+	for (i = 0; i < BITS_IN_PC1/2; i++, j++) {
+		d[i] = src[PC1[j] - 1];
+	}
+
+	d[i] = 2;
+
+	return 0;
+}
+
+int pc_2(const uint8_t* src, uint8_t* dst) {
+
+	if (!src || !dst)
+		return -1;
+
+	int i;
+
+	// La contraccion se realiza en el mismo bucle
+	for (i = 0; i < BITS_IN_PC2; i++) {
+		dst[i] = src[PC2[i] - 1];
+	}
+
+	dst[i] = 2;
+	return 0;
+}
+
+int key_generator(const uint8_t* k, uint8_t** ks) {
+
+	if (!k || !ks)
+		return -1;
+
+	int i;
+	uint8_t c[29];
+	uint8_t d[29];
+	uint8_t cat_c_d[57];
+	uint8_t aux_k[49];
+
+	// C0 y D0
+	if (pc_1(k, c, d) < 0)
+		return -1;
+
+	// C1
+	if (rotatory_left_shift_n(c, c, ROUND_SHIFTS[0]) < 0)
+	 	return -1;
+
+	// D1
+	if (rotatory_left_shift_n(d, d, ROUND_SHIFTS[0]) < 0)
+	 	return -1;
+
+	// Se concatenan c y d para pasar por PC2
+	if (intcpy(cat_c_d, c) < 0)
+		return -1;
+
+	if (intcat(cat_c_d, d) < 0)
+		return -1;
+
+	// K1
+	if (pc_2(cat_c_d, aux_k) < 0)
+		return -1;
+
+	ks[0] = aux_k;
+
+	for (i = 1; i < ROUNDS; i++) {
+		// Cn
+		if (rotatory_left_shift_n(c, c, ROUND_SHIFTS[i]) < 0)
+		 	return -1;
+
+		// Dn
+		if (rotatory_left_shift_n(d, d, ROUND_SHIFTS[i]) < 0)
+		 	return -1;
+
+		if (intcpy(cat_c_d, c) < 0)
+			return -1;
+
+		if (intcat(cat_c_d, d) < 0)
+			return -1;
+
+		// Kn
+		if (pc_2(cat_c_d, aux_k) < 0)
+			return -1;
+
+		ks[i] = aux_k;
+	}
+
+	return 0;
+}
+
+int expansion(const uint8_t* src, uint8_t* dst) {
+
+	if (!src || !dst)
+		return -1;
+
+	int i;
+
+	for (i = 0; i < BITS_IN_E; i++) {
+		dst[i] = src[E[i] - 1];
+	}
+
+	dst[i] = 2;
+	return 0;
+}
+
+int permutation(const uint8_t* src, uint8_t* dst) {
+
+	if (!src || !dst)
+		return -1;
+
+	int i;
+	uint8_t aux_src[intlen(src) + 1];
+
+	/* 	Permite que src y dst sean la misma variable al
+	 	llamar a la funcion, p.ej. permutation(src, src) */
+	if (intcpy(aux_src, src) < 0)
+		return -1;
+
+	for (i = 0; i < BITS_IN_P; i++) {
+		dst[i] = aux_src[P[i] - 1];
+	}
+
+	dst[i] = 2;
+	return 0;
+}
+
+int function_f(const uint8_t* r, const uint8_t* k, uint8_t* output) {
+
+	if (!r || !k || !output)
+		return -1;
+
+	int i;
+	int j;
+	int l;
+	int row;
+	int column;
+	int index;
+	uint8_t bits[NUM_S_BOXES][5];
+	uint8_t row_bits[3];
+	uint8_t column_bits[5];
+	uint8_t exp[49];
+	uint8_t bits_per_box[NUM_S_BOXES][7];
+	uint8_t after_sustitution[33];
+
+	if (expansion(r, exp) < 0)
+		return -1;
+
+	if (xor(exp, exp, k) < 0)
+		return -1;
+
+	/* 	Divide el resultador de exp XOR k en bloques de 6 bits
+		para realizar la sustitucion con las S-BOXES
+	*/
+	for (i = 0, j = 0, l = 0; i < intlen(exp); i++) {
+		bits_per_box[j][l] = exp[i];
+		l++;
+
+		if (i && !(i % 5)) {
+			l++;
+			bits_per_box[j][l] = 2;
+			l = 0;	
+			j++;
+		}
+	}
+
+	// Realiza la sustitucion con las S-BOXES
+	for (i = 0; i < NUM_S_BOXES; i++) {
+		row_bits[0] = bits_per_box[i][0];
+		row_bits[1] = bits_per_box[i][5];
+		row_bits[2] = 2;
+
+		column_bits[0] = bits_per_box[i][1];
+		column_bits[1] = bits_per_box[i][2];
+		column_bits[2] = bits_per_box[i][3];
+		column_bits[3] = bits_per_box[i][4];
+		column_bits[4] = 2;
+
+		row = convertBinaryToDecimal(row_bits);
+		column = convertBinaryToDecimal(column_bits);
+
+		if (row < 0 || column < 0)
+			return -1;
+
+		if (convertDecimalToBinary(S_BOXES[i][row][column], bits[i], 4) < 0)
+			return -1;
+	}
+
+	// Pasamos el resultado de la sustitucion a un unico array
+	for (i = 0, index = 0; i < NUM_S_BOXES; ++i) {
+		for (j = 0; j < 4; ++j, ++index) {
+			after_sustitution[index] = bits[i][j];
+		}
+	}
+
+	after_sustitution[index] = 2;
+
+	if (permutation(after_sustitution, output) < 0)
+		return -1;
+
+	return 0;
+}
+
+int convertBinaryToDecimal(const uint8_t* n) {
+
+	if (!n)
+		return -1;
+
+	int i;
+	int j;
+	int remainder;
+	int decimalNumber = 0;
+
+    for (i = (intlen(n) - 1), j = 0; i >= 0; i--, j++) {
+        decimalNumber += n[i] * pow(2, j);
+    }
+
+    return decimalNumber;
+}
+
+/* 	num_bits indica el numero de bits con los que se quiere representar
+ 	el numero decimal, p.ej: dec = 100 y num_bits = 16 => 
+ 	bits = 00000000 01100100
+ */
+int convertDecimalToBinary(const int dec, uint8_t* bits, int num_bits) {
+
+	if (!bits)
+		return -1;
+
+	int i;
+	int tempDec = dec;
+
+	for (i = (num_bits - 1); i >= 0; --i) {
+		if (tempDec) {
+			bits[i] = tempDec  % 2;
+			tempDec /= 2;
+		} else
+			bits[i] = 0;
+	}
+
+	bits[num_bits] = 2;
+	return 0;
+}
+
+int initial_permutation(const uint8_t* src, uint8_t* l, uint8_t* r) {
+
+	if (!src || !l || !r)
+		return -1;
+
+	int i;
+	int index = 0;
+	uint8_t aux_src[intlen(src) + 1];
+
+	/* 	Permite que src y dst sean la misma variable al
+	 	llamar a la funcion, p.ej. permutation(src, src) */
+	if (intcpy(aux_src, src) < 0)
+		return -1;
+
+	for (i = 0; i < BITS_IN_IP/2; i++, index++) {
+		l[i] = aux_src[IP[index] - 1];
+	}
+
+	l[i] = 2;
+
+	for (i = 0; i < BITS_IN_IP/2; i++, index++) {
+		r[i] = aux_src[IP[index] - 1];
+	}
+
+	r[i] = 2;
+	return 0;
+}
+
+int initial_permutation_inv(const uint8_t* l, const uint8_t* r, uint8_t* dst) {
+
+	if (!l || !r || !dst)
+		return -1;
+
+	int i;
+	uint8_t src[65];
+
+	if (intcpy(src, l) < 0)
+		return -1;
+
+	if (intcat(src, r) < 0)
+		return -1;
+
+	for (i = 0; i < BITS_IN_IP; i++) {
+		dst[i] = src[IP_INV[i] - 1];
+	}
+
+	dst[i] = 2;	
+	return 0;
+}
+
+int swap(uint8_t* a, uint8_t* b) {
+
+	if (!a || !b)
+		return -1;
+
+	uint8_t aux[intlen(a) + 1];
+
+	if (intcpy(aux, a) < 0)
+		return -1;
+
+	if (intcpy(a, b) < 0)
+		return -1;
+
+	if (intcpy(b, aux) < 0)
+		return -1;
+
+	return 0;
+}
+
+int cipher(uint8_t* input, uint8_t* output, uint8_t* k) {
+
+	if (!input || !output || !k)
+		return -1;
+
+	int i;
+	uint8_t l[33];
+	uint8_t r[33];
+	uint8_t** ks;
+	uint8_t output_f[33];
+	uint8_t output_xor[33];
+
+	ks = (uint8_t **) malloc (ROUNDS * sizeof(uint8_t));
+	if (!ks)
+		return -1;
+
+	for (i = 0; i < ROUNDS; i++) {
+		ks[i] = (uint8_t *) malloc (49 * sizeof(uint8_t));
+		if (!ks[i])
+			return -1;
+	}
+
+	if (key_generator(k, ks) < 0)
+		return -1;
+
+	if (initial_permutation(input, l, r) < 0)
+		return -1;	
+
+	for (i = 0; i < (ROUNDS - 2); i++) {
+		if (function_f(r, ks[i], output_f)	< 0)
+			return -1;
+
+		if (xor(output_xor, l, output_f) < 0)
+			return -1;
+
+		if (swap(output_xor, r) < 0)
+			return -1;
+	}
+
+	if (function_f(r, ks[i], output_f)	< 0)
+			return -1;
+
+	if (xor(output_xor, l, output_f) < 0)
+		return -1;	
+
+	if (initial_permutation_inv(output_xor, r, output) < 0)
+		return -1;
+
+	return 0;
+}
+
+int decipher(uint8_t* input, uint8_t* output, uint8_t* k) {
+
+	if (!input || !output || !k)
+		return -1;
+
+	int i;
+	uint8_t l[33];
+	uint8_t r[33];
+	uint8_t** ks;
+	uint8_t output_f[33];
+	uint8_t output_xor[33];
+
+	ks = (uint8_t **) malloc (ROUNDS * sizeof(uint8_t));
+	if (!ks)
+		return -1;
+
+	for (i = 0; i < ROUNDS; i++) {
+		ks[i] = (uint8_t *) malloc (49 * sizeof(uint8_t));
+		if (!ks[i])
+			return -1;
+	}
+
+	if (key_generator(k, ks) < 0)
+		return -1;
+
+	if (initial_permutation(input, l, r) < 0)
+		return -1;	
+
+	for (i = (ROUNDS - 1); i >= 1; i--) {
+		if (function_f(r, ks[i], output_f)	< 0)
+			return -1;
+
+		if (xor(output_xor, l, output_f) < 0)
+			return -1;
+
+		if (swap(output_xor, r) < 0)
+			return -1;
+	}
+
+	if (function_f(r, ks[i], output_f)	< 0)
+			return -1;
+
+	if (xor(output_xor, l, output_f) < 0)
+		return -1;	
+
+	if (initial_permutation_inv(output_xor, r, output) < 0)
+		return -1;
+
+	return 0;
+}
