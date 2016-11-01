@@ -24,7 +24,7 @@ int pc_2(const uint8_t* src, uint8_t* dst);
 int key_generator(const uint8_t* k, uint8_t** ks);
 int expansion(const uint8_t* src, uint8_t* dst);
 int permutation(const uint8_t* src, uint8_t* dst);
-int sustitution(const uint8_t* r, const uint8_t* k, uint8_t* output);
+int function_f(const uint8_t* r, const uint8_t* k, uint8_t* output);
 
 int main (int argc, char* argv[]) {
 	int c;
@@ -544,7 +544,7 @@ int permutation(const uint8_t* src, uint8_t* dst) {
 	return 0;
 }
 
-int sustitution(const uint8_t* r, const uint8_t* k, uint8_t* output) {
+int function_f(const uint8_t* r, const uint8_t* k, uint8_t* output) {
 
 	if (!r || !k || !output)
 		return -1;
