@@ -12,7 +12,9 @@ int intcat(uint8_t* dst, const uint8_t* src);
 
 int rotatory_left_shift_n  (const uint8_t* array, uint8_t* array_shift, int n);
 int char_to_bits  (const char c, uint8_t* bits);
+int bits_to_char(const uint8_t* bits);
 int string_to_bits(const char* string, uint8_t* bits);
+int bits_to_string(const uint8_t* bits, char* string);
 int xor(uint8_t* dst, const uint8_t* a, const uint8_t* b);
 int convertBinaryToDecimal(const uint8_t* n);
 int convertDecimalToBinary(const int dec, uint8_t* bits, int num_bits);
@@ -25,6 +27,11 @@ int key_generator(const uint8_t* k, uint8_t** ks);
 int expansion(const uint8_t* src, uint8_t* dst);
 int permutation(const uint8_t* src, uint8_t* dst);
 int function_f(const uint8_t* r, const uint8_t* k, uint8_t* output);
+int initial_permutation(const uint8_t* src, uint8_t* l, uint8_t* r);
+int initial_permutation_inv(const uint8_t* l, const uint8_t* r, uint8_t* dst);
+
+int cipher(uint8_t* input, uint8_t* output, uint8_t* k);
+int decipher(uint8_t* input, uint8_t* output, uint8_t* k);
 
 int main (int argc, char* argv[]) {
 	int c;
@@ -32,16 +39,12 @@ int main (int argc, char* argv[]) {
 	int modo = -1;
 	FILE* fin = NULL;
 	FILE* fout = NULL;
-	uint8_t* k; 
+	uint8_t* k;
+	uint8_t* input;
+	uint8_t* output;
 	char* aux_k;
 	char strbuf[MAX_STR];
 	char* file_text = NULL;
-
-	uint8_t** ks;
-	ks = (uint8_t **) malloc (17 * sizeof(uint8_t));
-	for(int i = 0; i < 17; i++) {
-		ks[i] = (uint8_t *)malloc(49 * sizeof(uint8_t));
-	}
 	
 	while (1) {
 		int option_index = 0;
@@ -66,7 +69,6 @@ int main (int argc, char* argv[]) {
 				modo = DESCIFRAR;
 				break;
 			case 'k':
-
 				aux_k = (char *) malloc ((strlen(optarg) + 1) * sizeof(char));
 				if (!aux_k) {
 					printf("Error al reservar memoria\n");
@@ -101,7 +103,6 @@ int main (int argc, char* argv[]) {
 					return EXIT_FAILURE;
 				}
 
-				k[DES_K_SIZE + 1] = 2;
 				free(aux_k);
 				break;
 			case 'i':
@@ -179,7 +180,42 @@ int main (int argc, char* argv[]) {
 		if (modo == CIFRAR) {
 			toUpperOnly(strbuf);
 			len = strlen(strbuf);
-			//TODO: añadir funcion de cifrado
+
+			input = (uint8_t *) malloc (((8 * len) + 2) * sizeof(uint8_t));
+			if (!input) {
+				free(k);
+				return EXIT_FAILURE;
+			}
+
+			output = (uint8_t *) malloc (((8 * len) + 2) * sizeof(uint8_t));
+			if (!output) {
+				free(k);
+				free(input);
+				return EXIT_FAILURE;
+			}
+
+			if (string_to_bits(strbuf, input) < 0) {
+				free(k);
+				free(input);
+				free(output);
+				return EXIT_FAILURE;
+			}
+			
+			if (cipher(input, output, k) < 0) {
+				free(k);
+				free(input);
+				free(output);
+				return EXIT_FAILURE;
+			}
+
+			if (bits_to_string(output, strbuf) < 0) {
+				free(k);
+				free(input);
+				free(output);
+				return EXIT_FAILURE;
+			}
+
+			fwrite(strbuf, len, sizeof(char), fout);
 
 		} else {
 			//TODO: añadir funcion de descifrado
@@ -201,17 +237,12 @@ int main (int argc, char* argv[]) {
 
 int char_to_bits(const char c, uint8_t* bits) {
 
-	int i;
-	int j;
+	return convertDecimalToBinary(c, bits, 8);
+}
 
-	if (!bits)
-		return -1;
+int bits_to_char(const uint8_t* bits) {
 
-    for (i = 7, j = 0; i >= 0; --i, ++j) {
-        bits[j] = ( (c & (1 << i)) ? 1 : 0 );
-    }
-
-    return 0;
+	return convertBinaryToDecimal(bits);
 }
 
 int string_to_bits(const char* string, uint8_t* bits) {
@@ -223,7 +254,7 @@ int string_to_bits(const char* string, uint8_t* bits) {
 	int i;
 	int j;
 	int index;
-	uint8_t aux_bits[8];
+	uint8_t aux_bits[9];
 
 	len = strlen(string);
 	index = 0;
@@ -236,7 +267,33 @@ int string_to_bits(const char* string, uint8_t* bits) {
 		}
 	}
 
+	bits[index] = 2;
+
 	return 0;
+}
+
+int bits_to_string(const uint8_t* bits, char* string) {
+
+	if (!string || !bits)
+		return -1;
+
+	int i;
+	int j;
+	int index = 0;
+	int len = intlen(bits);
+	uint8_t aux_bits[9];
+
+	for (i = 0, j = 0; i < len; i++) {
+		aux_bits[j] = bits[i];
+		j++;
+
+		if (i && !(i % 7)) {
+			aux_bits[8] = 2;
+			string[index] = bits_to_char(aux_bits);
+			j = 0;
+			index++;
+		}
+	}
 }
 
 int add_n_padding(const char* src, char* dst, int n_to_add) {
@@ -362,7 +419,7 @@ int remove_parity_bits(const uint8_t* src, uint8_t* dst) {
 
 int xor(uint8_t* dst, const uint8_t* a, const uint8_t* b) {
 
-	if (!dst || !a || !b || intlen(a) != intlen(b))
+	if (!dst || !a || !b)
 		return -1;
 
 	int i;
@@ -375,7 +432,7 @@ int xor(uint8_t* dst, const uint8_t* a, const uint8_t* b) {
 		if (intcpy(aux_a, a) < 0)
 			return -1;
 
-		for (i = 0; i < intlen(a); i++) {
+		for (i = 0; i < intlen(aux_a); i++) {
 			dst[i] = aux_a[i] ^ b [i];
 		}
 
@@ -385,7 +442,7 @@ int xor(uint8_t* dst, const uint8_t* a, const uint8_t* b) {
 		if (intcpy(aux_b, b) < 0)
 			return -1;
 
-		for (i = 0; i < intlen(a); i++) {
+		for (i = 0; i < intlen(aux_b); i++) {
 			dst[i] = a[i] ^ aux_b [i];
 		}
 	}
@@ -550,7 +607,8 @@ int function_f(const uint8_t* r, const uint8_t* k, uint8_t* output) {
 		return -1;
 
 	int i;
-	int j = 0;
+	int j;
+	int l;
 	int row;
 	int column;
 	int index;
@@ -570,11 +628,16 @@ int function_f(const uint8_t* r, const uint8_t* k, uint8_t* output) {
 	/* 	Divide el resultador de exp XOR k en bloques de 6 bits
 		para realizar la sustitucion con las S-BOXES
 	*/
-	for (i = 0; i < strlen(exp); i++) {
-		bits_per_box[j][i] = exp[i];
+	for (i = 0, j = 0, l = 0; i < intlen(exp); i++) {
+		bits_per_box[j][l] = exp[i];
+		l++;
 
-		if (!(i % 6))
+		if (i && !(i % 5)) {
+			l++;
+			bits_per_box[j][l] = 2;
+			l = 0;	
 			j++;
+		}
 	}
 
 	// Realiza la sustitucion con las S-BOXES
@@ -605,6 +668,8 @@ int function_f(const uint8_t* r, const uint8_t* k, uint8_t* output) {
 			after_sustitution[index] = bits[i][j];
 		}
 	}
+
+	after_sustitution[index] = 2;
 
 	if (permutation(after_sustitution, output) < 0)
 		return -1;
@@ -653,3 +718,173 @@ int convertDecimalToBinary(const int dec, uint8_t* bits, int num_bits) {
 	return 0;
 }
 
+int initial_permutation(const uint8_t* src, uint8_t* l, uint8_t* r) {
+
+	if (!src || !l || !r)
+		return -1;
+
+	int i;
+	int index = 0;
+	uint8_t aux_src[intlen(src) + 1];
+
+	/* 	Permite que src y dst sean la misma variable al
+	 	llamar a la funcion, p.ej. permutation(src, src) */
+	if (intcpy(aux_src, src) < 0)
+		return -1;
+
+	for (i = 0; i < BITS_IN_IP/2; i++, index++) {
+		l[i] = aux_src[IP[index] - 1];
+	}
+
+	l[i] = 2;
+
+	for (i = 0; i < BITS_IN_IP/2; i++, index++) {
+		r[i] = aux_src[IP[index] - 1];
+	}
+
+	r[i] = 2;
+	return 0;
+}
+
+int initial_permutation_inv(const uint8_t* l, const uint8_t* r, uint8_t* dst) {
+
+	if (!l || !r || !dst)
+		return -1;
+
+	int i;
+	uint8_t src[65];
+
+	if (intcpy(src, l) < 0)
+		return -1;
+
+	if (intcat(src, r) < 0)
+		return -1;
+
+	for (i = 0; i < BITS_IN_IP; i++) {
+		dst[i] = src[IP_INV[i] - 1];
+	}
+
+	dst[i] = 2;	
+	return 0;
+}
+
+int swap(uint8_t* a, uint8_t* b) {
+
+	if (!a || !b)
+		return -1;
+
+	uint8_t aux[intlen(a) + 1];
+
+	if (intcpy(aux, a) < 0)
+		return -1;
+
+	if (intcpy(a, b) < 0)
+		return -1;
+
+	if (intcpy(b, aux) < 0)
+		return -1;
+
+	return 0;
+}
+
+int cipher(uint8_t* input, uint8_t* output, uint8_t* k) {
+
+	if (!input || !output || !k)
+		return -1;
+
+	int i;
+	uint8_t l[33];
+	uint8_t r[33];
+	uint8_t** ks;
+	uint8_t output_f[33];
+	uint8_t output_xor[33];
+
+	ks = (uint8_t **) malloc (ROUNDS * sizeof(uint8_t));
+	if (!ks)
+		return -1;
+
+	for (i = 0; i < ROUNDS; i++) {
+		ks[i] = (uint8_t *) malloc (49 * sizeof(uint8_t));
+		if (!ks[i])
+			return -1;
+	}
+
+	if (key_generator(k, ks) < 0)
+		return -1;
+
+	if (initial_permutation(input, l, r) < 0)
+		return -1;	
+
+	for (i = 0; i < (ROUNDS - 2); i++) {
+		if (function_f(r, ks[i], output_f)	< 0)
+			return -1;
+
+		if (xor(output_xor, l, output_f) < 0)
+			return -1;
+
+		if (swap(output_xor, r) < 0)
+			return -1;
+	}
+
+	if (function_f(r, ks[i], output_f)	< 0)
+			return -1;
+
+	if (xor(output_xor, l, output_f) < 0)
+		return -1;	
+
+	if (initial_permutation_inv(output_xor, r, output) < 0)
+		return -1;
+
+	return 0;
+}
+
+int decipher(uint8_t* input, uint8_t* output, uint8_t* k) {
+
+	if (!input || !output || !k)
+		return -1;
+
+	int i;
+	uint8_t l[33];
+	uint8_t r[33];
+	uint8_t** ks;
+	uint8_t output_f[33];
+	uint8_t output_xor[33];
+
+	ks = (uint8_t **) malloc (ROUNDS * sizeof(uint8_t));
+	if (!ks)
+		return -1;
+
+	for (i = 0; i < ROUNDS; i++) {
+		ks[i] = (uint8_t *) malloc (49 * sizeof(uint8_t));
+		if (!ks[i])
+			return -1;
+	}
+
+	if (key_generator(k, ks) < 0)
+		return -1;
+
+	if (initial_permutation(input, l, r) < 0)
+		return -1;	
+
+	for (i = (ROUNDS - 1); i >= 1; i--) {
+		if (function_f(r, ks[i], output_f)	< 0)
+			return -1;
+
+		if (xor(output_xor, l, output_f) < 0)
+			return -1;
+
+		if (swap(output_xor, r) < 0)
+			return -1;
+	}
+
+	if (function_f(r, ks[i], output_f)	< 0)
+			return -1;
+
+	if (xor(output_xor, l, output_f) < 0)
+		return -1;	
+
+	if (initial_permutation_inv(output_xor, r, output) < 0)
+		return -1;
+
+	return 0;
+}
