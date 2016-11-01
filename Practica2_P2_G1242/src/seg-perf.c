@@ -1,9 +1,12 @@
 #include "../includes/algoritmos.h"
 
 #define SAMPLE_SIZE 150
-#define BIASED_P 0.7
+#define BIASED_P 0.68
+#define KEYSPACE 4
 
 char* getRandomKey(int size);
+
+char* getRandomBiasedKey(int size, char* base, double bias);
 
 int calcularProbabilidadesTexto(char* text, int len, FILE* outfile, modo m);
 
@@ -130,11 +133,9 @@ char* getRandomKey(int size) {
 		return NULL;
 	}
 	
-	makePermutation(key, size);
-	
 	int i;
 	for (i = 0; i < size; i++) {
-		key[i] = (key[i] % 26) + 'A';
+		key[i] = getRandomLessN(26) + 'A';
 	}
 	
 	return key;
@@ -146,8 +147,9 @@ int calcularProbabilidades(char* text, int len, modo m,
 		double probConjunto[ALPHA_SIZE][ALPHA_SIZE]) {
 	double* cipherProbabilities;
 	double** intersectionProbabilities;
-	char* key;
-	char* basekey;
+	char* key = NULL;
+	char* biasedKeys[KEYSPACE];
+	double keyProbs[KEYSPACE];
 	
 	memset(probCifrado, 0, ALPHA_SIZE * sizeof(double));
 	memset(probConjunto, 0, ALPHA_SIZE * ALPHA_SIZE * sizeof(double));
@@ -158,37 +160,52 @@ int calcularProbabilidades(char* text, int len, modo m,
 		perror("Al reservar memoria para cifrar el texto");
 		return -1;
 	}
-	
-	basekey = getRandomKey(len);
-	if (basekey == NULL) {
-		perror("Al generar clave para simular generacion dispar");
-		free(ciphertext);
-		return -1;
-	}
-	
-	//As during random generation any key character can coincide
-	//incidentally with the corresponding basekey character
-	//bias must be adjusted to account for it so that chance
-	//of coincidence trully is the provided bias
-	const double adjusted_bias = 1
-			- ((ALPHA_SIZE - 1)/(ALPHA_SIZE)) * (1 - BIASED_P);
 			
-	int i, j, k;
+	int i, j, k, curr_key;
+	
+	//probabilities follow the succesion p, p^2...p^n-1
+	//and the last one, of course, is 1 minus all other probabilities
+	keyProbs[0] = BIASED_P;
+	for (i = 1, j = keyProbs[0]; i < KEYSPACE - 1; i++) {
+		keyProbs[i] = keyProbs[i-1] * BIASED_P;
+		j += keyProbs[i];
+	}
+	keyProbs[i] = j;
+	
+	for(i = 0; i < KEYSPACE; i++) {
+		biasedKeys[i] = getRandomKey(len);
+		if (biasedKeys[i] == NULL) {
+			perror("Al crear las claves trucadas");
+			for (i--; i > -1; i--) {
+				free(biasedKeys[i]);
+			}
+			free(ciphertext);
+			return -1;
+		}
+	}
 	
 	
 	for (i = 0; i < SAMPLE_SIZE; i++) {
 		//generate key
-		key = getRandomKey(len);
+		if (m == DISPAR) {
+			for (j = 0; (j < KEYSPACE - 1) && (key == NULL); j++) {
+				if (getRandomLessN(101)/100.0 < BIASED_P) {
+					key = biasedKeys[j];
+				}
+			}
+			if (key == NULL) {
+				key = biasedKeys[j];
+			}
+			curr_key = j;
+		} else {
+			key = getRandomKey(len);
+		}
 		if (key == NULL) {
 			perror("Al obtener una clave para cifrar");
 			free(ciphertext);
-			free(basekey);
-		}
-		if (m == DISPAR) {
-			for (j = 0; j < len; j++) {
-				if (getRandomLessN(101)/100.0 < adjusted_bias) {
-					key[j] = basekey[j];
-				}
+			
+			for (i = 0; i < KEYSPACE; i++) {
+				free(biasedKeys[i]);
 			}
 		}
 		
@@ -198,7 +215,9 @@ int calcularProbabilidades(char* text, int len, modo m,
 			ciphertext[j] %= ALPHA_SIZE;
 			ciphertext[j] += 'A';
 		}
-		free(key);
+		if (m != DISPAR) {
+			free(key);
+		}
 		
 		//calculate ciphered probabilities
 		cipherProbabilities = getAlphabetProbabilities(ciphertext, len);
@@ -207,12 +226,18 @@ int calcularProbabilidades(char* text, int len, modo m,
 			
 			fprintf(stderr, "Clave: %s\n", key);
 			free(ciphertext);
-			free(basekey);
+			
+			for (i = 0; i < KEYSPACE; i++) {
+				free(biasedKeys[i]);
+			}
 			return -1;
 		}
 		
 		for (j = 0; j< ALPHA_SIZE; j++) {
-			probCifrado[j] += cipherProbabilities[j];
+			probCifrado[j] += cipherProbabilities[j] / SAMPLE_SIZE;
+			if (m == DISPAR) {
+				probCifrado[j] *= keyProbs[curr_key];
+			}
 		}
 		free(cipherProbabilities);
 		
@@ -220,20 +245,19 @@ int calcularProbabilidades(char* text, int len, modo m,
 		intersectionProbabilities = getIntersectionAlphabetProbabilities(text, len, ciphertext); 
 		for (j = 0; j < ALPHA_SIZE; j++) {
 			for (k = 0; k < ALPHA_SIZE; k++) {
-				probConjunto[j][k] += intersectionProbabilities[j][k];
+				probConjunto[j][k] += intersectionProbabilities[j][k] / SAMPLE_SIZE;
+				if (m == DISPAR) {
+					probConjunto[j][k] *= keyProbs[curr_key];
+				}
 			}
 			free(intersectionProbabilities[j]);
 		}
 		free (intersectionProbabilities);
 	}
 	free(ciphertext);
-	free(basekey);
 	
-	for (i = 0; i < ALPHA_SIZE; i++) {
-		probCifrado[i] /= SAMPLE_SIZE;
-		for (j = 0; j < ALPHA_SIZE; j++) {
-			probConjunto[i][j] /= SAMPLE_SIZE;
-		}
+	for (i = 0; i < KEYSPACE; i++) {
+		free(biasedKeys[i]);
 	}
 }
 
@@ -329,24 +353,42 @@ int calcularProbabilidadesFichero(FILE* infile, FILE* outfile, modo m) {
 	for (i = 0; i < ALPHA_SIZE; i++) {
 		fprintf(outfile, "P(%c) = %.3lf\n", 'A' + i, plainProbTotal[i]);
 	}
-	puts("|||");
+	
 	for (i = 0; i < ALPHA_SIZE; i++) {
 		for (j = 0; j < ALPHA_SIZE; j++) {
-			if (j != 0) {
-				intersectProbTotal[i][0] += intersectProbTotal[i][j];
-			}
-			/*if (cipherProbTotal[j] != 0) {
+			//~ if (j != 0) {
+				//~ intersectProbTotal[i][0] += intersectProbTotal[i][j];
+			//~ }
+			if (cipherProbTotal[j] != 0) {
 				fprintf(outfile, "P(%c|%c) = %.3lf ", 'A' + i, 'A' + j,
 						intersectProbTotal[i][j]
 								/ cipherProbTotal[j]);
 			} else {
 				fprintf(outfile, "P(%c|%c) = 0.000 ", 'A' + i, 'A' + j);
-			}*/
+			}
 		}
-		fprintf(outfile, "P(%c) = %.3lf ", 'A' + i,
-					intersectProbTotal[i][0]);
+		//~ fprintf(outfile, "%.3lf ", 'A' + i,
+					//~ fabs(plainProbTotal[i] - intersectProbTotal[i][0]));
 		fputc('\n', outfile);
 	}
-	puts("------");
+	//~ puts("");
 	return 0;
+}
+
+char* getRandomBiasedKey(int size, char* base, double bias) {
+	char* k = (char*)calloc(size, sizeof(char));
+	if (k == NULL) {
+		return k;
+	}
+	int i, j;
+	
+	double p = getRandomLessN(101)/100.0;
+	
+	memcpy(k, base, size*sizeof(char));
+	
+	if (p > bias) {
+		free(k);
+		k = getRandomKey(size);
+	}
+	return k;
 }

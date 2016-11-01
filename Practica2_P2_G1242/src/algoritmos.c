@@ -21,10 +21,9 @@ double average(int how_many, double* vals) {
 	return sum/how_many;
 }
 
+//much flatter random number distribution even on fast executions
 int getRandomLessN(int n) {
-
-	srand(time(NULL));
-	return (rand() % n);
+	return random() % n;
 }
 
 void makePermutation(char* permutation, int n) {

@@ -1,10 +1,14 @@
+#define _DEFAULT_SOURCE
 #include <stdio.h>
+
 #include <stdlib.h>
 #include <getopt.h>
 #include <ctype.h>
 #include <time.h>
 #include <string.h>
 #include <stdint.h>
+#include <math.h>
+#include <sys/time.h>
 
 #define MAX_STR 512
 #define ALPHA_SIZE 26

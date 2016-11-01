@@ -7,10 +7,10 @@ LIB=lib/
 
 all: $(EXE1) $(EXE2)
 
-$(EXE1): $(SRC)$(EXE1).c $(SRC)algoritmos.c
+$(EXE1): $(SRC)$(EXE1).c $(SRC)algoritmos.c $(INC)algoritmos.h
 	$(CC) --std=c99 -g -o $(EXE1) $^
 
-$(EXE2): $(SRC)$(EXE2).c $(SRC)algoritmos.c
+$(EXE2): $(SRC)$(EXE2).c $(SRC)algoritmos.c $(INC)algoritmos.h
 	$(CC) --std=c99 -g -o $(EXE2) $^
 
 clean:
