@@ -69,7 +69,7 @@ int main (int argc, char* argv[]) {
 				modo = DESCIFRAR;
 				break;
 			case 'k':
-				aux_k = (char *) malloc ((strlen(optarg) + 1) * sizeof(char));
+				aux_k = (char *) malloc (9 * sizeof(char));
 				if (!aux_k) {
 					printf("Error al reservar memoria\n");
 					return EXIT_FAILURE;
@@ -147,7 +147,8 @@ int main (int argc, char* argv[]) {
 			fclose(fin);
 		}
 
-		free(k);
+		if (!k)
+			free(k);
 		return EXIT_FAILURE;
 	}
 	
@@ -175,7 +176,7 @@ int main (int argc, char* argv[]) {
 			strbuf[len] = '\0';
 		}
 
-		printf("Read %d bytes", len);
+		printf("Read %d bytes\n", len);
 
 		if (modo == CIFRAR) {
 			toUpperOnly(strbuf);
@@ -307,7 +308,7 @@ int add_n_padding(const char* src, char* dst, int n_to_add) {
 	if (len < 0)
 		return -1; 
 
-	strcpy(dst, src);
+	memmove(dst, src, (len + 1) * sizeof(char));
 
 	for (i = len; i < (len + n_to_add); i++) {
 		dst[i] = 'A';
@@ -519,28 +520,7 @@ int key_generator(const uint8_t* k, uint8_t** ks) {
 	if (pc_1(k, c, d) < 0)
 		return -1;
 
-	// C1
-	if (rotatory_left_shift_n(c, c, ROUND_SHIFTS[0]) < 0)
-	 	return -1;
-
-	// D1
-	if (rotatory_left_shift_n(d, d, ROUND_SHIFTS[0]) < 0)
-	 	return -1;
-
-	// Se concatenan c y d para pasar por PC2
-	if (intcpy(cat_c_d, c) < 0)
-		return -1;
-
-	if (intcat(cat_c_d, d) < 0)
-		return -1;
-
-	// K1
-	if (pc_2(cat_c_d, aux_k) < 0)
-		return -1;
-
-	ks[0] = aux_k;
-
-	for (i = 1; i < ROUNDS; i++) {
+	for (i = 0; i < ROUNDS; i++) {
 		// Cn
 		if (rotatory_left_shift_n(c, c, ROUND_SHIFTS[i]) < 0)
 		 	return -1;
@@ -559,7 +539,7 @@ int key_generator(const uint8_t* k, uint8_t** ks) {
 		if (pc_2(cat_c_d, aux_k) < 0)
 			return -1;
 
-		ks[i] = aux_k;
+		intcpy(ks[i], aux_k);
 	}
 
 	return 0;
@@ -612,12 +592,12 @@ int function_f(const uint8_t* r, const uint8_t* k, uint8_t* output) {
 	int row;
 	int column;
 	int index;
-	uint8_t bits[NUM_S_BOXES][5];
-	uint8_t row_bits[3];
-	uint8_t column_bits[5];
-	uint8_t exp[49];
-	uint8_t bits_per_box[NUM_S_BOXES][7];
-	uint8_t after_sustitution[33];
+	uint8_t bits[NUM_S_BOXES][6];
+	uint8_t row_bits[4];
+	uint8_t column_bits[6];
+	uint8_t exp[50];
+	uint8_t bits_per_box[NUM_S_BOXES][8];
+	uint8_t after_sustitution[34];
 
 	if (expansion(r, exp) < 0)
 		return -1;
@@ -625,19 +605,11 @@ int function_f(const uint8_t* r, const uint8_t* k, uint8_t* output) {
 	if (xor(exp, exp, k) < 0)
 		return -1;
 
-	/* 	Divide el resultador de exp XOR k en bloques de 6 bits
+	/* 	Divide el resultador de (exp XOR k) en bloques de 6 bits
 		para realizar la sustitucion con las S-BOXES
 	*/
-	for (i = 0, j = 0, l = 0; i < intlen(exp); i++) {
-		bits_per_box[j][l] = exp[i];
-		l++;
-
-		if (i && !(i % 5)) {
-			l++;
-			bits_per_box[j][l] = 2;
-			l = 0;	
-			j++;
-		}
+	for (i = 0, j = 0, l = 0; i < intlen(exp); i+=6, j++) {
+		intncpy(bits_per_box[j], exp + i, 6);
 	}
 
 	// Realiza la sustitucion con las S-BOXES
@@ -663,10 +635,8 @@ int function_f(const uint8_t* r, const uint8_t* k, uint8_t* output) {
 	}
 
 	// Pasamos el resultado de la sustitucion a un unico array
-	for (i = 0, index = 0; i < NUM_S_BOXES; ++i) {
-		for (j = 0; j < 4; ++j, ++index) {
-			after_sustitution[index] = bits[i][j];
-		}
+	for (i = 0, index = 0; i < NUM_S_BOXES; ++i, index+=4) {
+		intncpy(after_sustitution + index, bits[i], 4);
 	}
 
 	after_sustitution[index] = 2;
@@ -752,7 +722,7 @@ int initial_permutation_inv(const uint8_t* l, const uint8_t* r, uint8_t* dst) {
 		return -1;
 
 	int i;
-	uint8_t src[65];
+	uint8_t src[66];
 
 	if (intcpy(src, l) < 0)
 		return -1;
@@ -793,18 +763,19 @@ int cipher(uint8_t* input, uint8_t* output, uint8_t* k) {
 		return -1;
 
 	int i;
-	uint8_t l[33];
-	uint8_t r[33];
+	int j;
+	uint8_t l[34];
+	uint8_t r[34];
 	uint8_t** ks;
-	uint8_t output_f[33];
-	uint8_t output_xor[33];
+	uint8_t output_f[36];
+	uint8_t output_xor[36];
 
-	ks = (uint8_t **) malloc (ROUNDS * sizeof(uint8_t));
+	ks = (uint8_t **) malloc ((ROUNDS + 1) * sizeof(uint8_t *));
 	if (!ks)
 		return -1;
 
 	for (i = 0; i < ROUNDS; i++) {
-		ks[i] = (uint8_t *) malloc (49 * sizeof(uint8_t));
+		ks[i] = (uint8_t *) malloc (50 * sizeof(uint8_t));
 		if (!ks[i])
 			return -1;
 	}
@@ -813,17 +784,48 @@ int cipher(uint8_t* input, uint8_t* output, uint8_t* k) {
 		return -1;
 
 	if (initial_permutation(input, l, r) < 0)
-		return -1;	
+		return -1;
 
 	for (i = 0; i < (ROUNDS - 2); i++) {
 		if (function_f(r, ks[i], output_f)	< 0)
 			return -1;
 
+		printf("output_f:   ");
+		for (i = 0; i < intlen(output_f); i++) {
+			printf("%d ", output_f[i]);
+		}
+		printf("\n");
+
+		printf("l         : ");
+		for (i = 0; i < intlen(l); i++) {
+			printf("%d ", l[i]);
+		}
+		printf("\n");
+
 		if (xor(output_xor, l, output_f) < 0)
 			return -1;
 
+		printf("output_xor:  ");
+		for (i = 0; i < intlen(output_xor); i++) {
+			printf("%d ", output_xor[i]);
+		}
+		printf("\n");
+
 		if (swap(output_xor, r) < 0)
 			return -1;
+
+		printf("output_xor: ");
+		for (i = 0; i < intlen(output_xor); i++) {
+			printf("%d ", output_xor[i]);
+		}
+		printf("\n");
+
+		printf("r: ");
+		for (i = 0; i < intlen(r); i++) {
+			printf("%d ", r[i]);
+		}
+		printf("\n");
+
 	}
 
 	if (function_f(r, ks[i], output_f)	< 0)
@@ -844,18 +846,18 @@ int decipher(uint8_t* input, uint8_t* output, uint8_t* k) {
 		return -1;
 
 	int i;
-	uint8_t l[33];
-	uint8_t r[33];
+	uint8_t l[34];
+	uint8_t r[34];
 	uint8_t** ks;
-	uint8_t output_f[33];
-	uint8_t output_xor[33];
+	uint8_t output_f[34];
+	uint8_t output_xor[34];
 
 	ks = (uint8_t **) malloc (ROUNDS * sizeof(uint8_t));
 	if (!ks)
 		return -1;
 
 	for (i = 0; i < ROUNDS; i++) {
-		ks[i] = (uint8_t *) malloc (49 * sizeof(uint8_t));
+		ks[i] = (uint8_t *) malloc (50 * sizeof(uint8_t));
 		if (!ks[i])
 			return -1;
 	}
