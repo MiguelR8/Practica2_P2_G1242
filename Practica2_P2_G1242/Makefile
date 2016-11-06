@@ -10,7 +10,7 @@ all: $(EXE1) $(EXE2)
 $(EXE1): $(SRC)$(EXE1).c $(SRC)algoritmos.c $(INC)algoritmos.h
 	$(CC) --std=c99 -g -o $(EXE1) $^
 
-$(EXE2): $(SRC)$(EXE2).c $(SRC)algoritmos.c $(INC)algoritmos.h
+$(EXE2): $(SRC)$(EXE2).c $(SRC)algoritmos.c $(INC)algoritmos.h $(SRC)operations_bits.c $(INC)operations_bits.h $(SRC)des.c $(INC)des.h
 	$(CC) --std=c99 -g -o $(EXE2) $^ -lm
 
 clean:

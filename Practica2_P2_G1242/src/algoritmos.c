@@ -11,6 +11,41 @@ void toUpperOnly(char* src) {
     src[j] = '\0';
 }
 
+void toUpperAndNumbersOnly(char* src) {
+    int i, j;
+    for (i = 0, j = 0; src[i] != '\0'; i++) {
+        if (isalpha(src[i])) {
+            src[j] = (char) (toupper(src[i]));
+            j++;
+        } else if (src[i] >= 48 && src[i] <= 57) {
+        	src[j] = src[i];
+            j++;
+        }
+    }
+    src[j] = '\0';
+}
+
+int add_n_padding(const char* src, char* dst, int n_to_add) {
+
+	if (!src || !dst)
+		return -1;
+
+	int i;
+	int len = strlen(src);
+
+	if (len < 0)
+		return -1; 
+
+	memmove(dst, src, (len + 1) * sizeof(char));
+
+	for (i = len; i < (len + n_to_add); i++) {
+		dst[i] = 'A';
+	}
+
+	dst[i] = '\0';
+	return 0;
+}
+
 double average(int how_many, double* vals) {
 	int i = 0;
 	double sum = 0;
@@ -24,6 +59,10 @@ double average(int how_many, double* vals) {
 //much flatter random number distribution even on fast executions
 int getRandomLessN(int n) {
 	return random() % n;
+}
+
+int getRandomFromMAddN(int m, int n) {
+	return random() % n + m;
 }
 
 void makePermutation(char* permutation, int n) {

@@ -9,6 +9,8 @@
 #include <stdint.h>
 #include <math.h>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #define MAX_STR 512
 #define ALPHA_SIZE 26
@@ -20,6 +22,8 @@ extern char *optarg;
 extern int optind, opterr, optopt;
 
 void toUpperOnly(char* src);
+void toUpperAndNumbersOnly(char* src);
+int add_n_padding (const char* src, char* dst, int n_to_add);
 
 double average(int how_many, double* vals);
 double* getAlphabetProbabilities(char* text, int len);
@@ -27,5 +31,6 @@ double** getIntersectionAlphabetProbabilities (char* plaintext, long len, char* 
 
 // permutation functions
 int getRandomLessN(int n);
+int getRandomFromMAddN(int m, int n);
 void makePermutation(char* permutation, int n);
 void fitArray(char* array, int posEle, int arraySize);
