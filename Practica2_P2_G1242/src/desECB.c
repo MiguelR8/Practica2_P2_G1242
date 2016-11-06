@@ -42,7 +42,7 @@ int main (int argc, char* argv[]) {
 	int n_to_add;
 	FILE* fin = NULL;
 	FILE* fout = NULL;
-	uint8_t* k;
+	uint8_t* k = NULL;
 	uint8_t* input;
 	uint8_t* output;
 	char aux_k[9];
@@ -120,7 +120,7 @@ int main (int argc, char* argv[]) {
 	}
 	
 	//TODO: comprobar introduccion al programa de la clave
-	if (modo == -1) {
+	if (modo == -1 || !k) {
 		printf("Uso: %s {-C|-D -k clave} [-i filein] [-o fileout]\n", argv[0]);
 		if (fout != NULL) {
 			fclose(fout);
@@ -173,7 +173,7 @@ int main (int argc, char* argv[]) {
 					}
 				} else {
 					n_to_add = len / 8;
-					n_to_add = len - (8 * n_to_add);
+					n_to_add = (8 * (n_to_add + 1)) - len;
 					if (add_n_padding(strbuf, strbuf, n_to_add) < 0) {
 						free(k);
 						return EXIT_FAILURE;
@@ -336,13 +336,14 @@ int bits_to_string(const uint8_t* bits, char* string) {
 
 	for (i = 0, j = 0; i < len; i++) {
 		aux_bits[j] = bits[i];
-		j++;
 
-		if (i && !(i % 7)) {
+		if (j != 0 && (j % 7) == 0) {
 			aux_bits[8] = 2;
 			string[index] = bits_to_char(aux_bits);
 			j = 0;
 			index++;
+		} else {
+			j++;
 		}
 	}
 
@@ -846,7 +847,7 @@ int cipher(uint8_t* input, uint8_t* output, uint8_t* k) {
 	if (swap(output_xor, r) < 0)
 			return -1;
 
-	for (i = 1; i < ROUNDS; i++) {
+	for (i = 1; i < (ROUNDS - 1); i++) {
 		if (function_f(r, ks[i], output_f)	< 0)
 			return -1;
 
@@ -856,6 +857,12 @@ int cipher(uint8_t* input, uint8_t* output, uint8_t* k) {
 		if (swap(output_xor, r) < 0)
 			return -1;
 	}
+
+	if (function_f(r, ks[ROUNDS - 1], output_f)	< 0)
+			return -1;
+
+	if (xor(output_xor, output_xor, output_f) < 0)
+		return -1;
 
 	if (initial_permutation_inv(output_xor, r, output) < 0)
 		return -1;
@@ -906,7 +913,7 @@ int decipher(uint8_t* input, uint8_t* output, uint8_t* k) {
 	if (swap(output_xor, r) < 0)
 			return -1;
 
-	for (i = (ROUNDS - 2); i >= 0; i--) {
+	for (i = (ROUNDS - 2); i >= 1; i--) {
 		if (function_f(r, ks[i], output_f)	< 0)
 			return -1;
 
@@ -916,6 +923,12 @@ int decipher(uint8_t* input, uint8_t* output, uint8_t* k) {
 		if (swap(output_xor, r) < 0)
 			return -1;
 	}
+
+	if (function_f(r, ks[0], output_f)	< 0)
+			return -1;
+
+	if (xor(output_xor, output_xor, output_f) < 0)
+		return -1;
 
 	if (initial_permutation_inv(output_xor, r, output) < 0)
 		return -1;
