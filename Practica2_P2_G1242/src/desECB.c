@@ -319,7 +319,6 @@ int string_to_bits(const char* string, uint8_t* bits) {
 	}
 
 	bits[index] = 2;
-
 	return 0;
 }
 
@@ -348,6 +347,7 @@ int bits_to_string(const uint8_t* bits, char* string) {
 	}
 
 	string[index] = '\0';
+	return 0;
 }
 
 int add_n_padding(const char* src, char* dst, int n_to_add) {
@@ -816,11 +816,18 @@ int cipher(uint8_t* input, uint8_t* output, uint8_t* k) {
 
 	int i;
 	int j;
+	int times;
+	int index;
+	int repets;
 	uint8_t l[34];
 	uint8_t r[34];
 	uint8_t** ks;
+	uint8_t aux_input[66];
+	uint8_t aux_output[66];
 	uint8_t output_f[36];
 	uint8_t output_xor[36];
+
+	output[0] = 2;
 
 	ks = (uint8_t **) malloc ((ROUNDS + 1) * sizeof(uint8_t *));
 	if (!ks)
@@ -835,37 +842,44 @@ int cipher(uint8_t* input, uint8_t* output, uint8_t* k) {
 	if (key_generator(k, ks) < 0)
 		return -1;
 
-	if (initial_permutation(input, l, r) < 0)
-		return -1;
+	times = intlen(input) / 64;
+	for (repets = 0, index = 0; repets < times; repets++, index += 64) {
+		intncpy(aux_input, input + index, 64);
 
-	if (function_f(r, ks[0], output_f)	< 0)
+		if (initial_permutation(aux_input, l, r) < 0)
 			return -1;
 
-	if (xor(output_xor, l, output_f) < 0)
-		return -1;
+		if (function_f(r, ks[0], output_f)	< 0)
+				return -1;
 
-	if (swap(output_xor, r) < 0)
+		if (xor(output_xor, l, output_f) < 0)
 			return -1;
 
-	for (i = 1; i < (ROUNDS - 1); i++) {
-		if (function_f(r, ks[i], output_f)	< 0)
-			return -1;
+		if (swap(output_xor, r) < 0)
+				return -1;
+
+		for (i = 1; i < (ROUNDS - 1); i++) {
+			if (function_f(r, ks[i], output_f)	< 0)
+				return -1;
+
+			if (xor(output_xor, output_xor, output_f) < 0)
+				return -1;
+
+			if (swap(output_xor, r) < 0)
+				return -1;
+		}
+
+		if (function_f(r, ks[ROUNDS - 1], output_f)	< 0)
+				return -1;
 
 		if (xor(output_xor, output_xor, output_f) < 0)
 			return -1;
 
-		if (swap(output_xor, r) < 0)
+		if (initial_permutation_inv(output_xor, r, aux_output) < 0)
 			return -1;
+
+		intcat(output, aux_output);
 	}
-
-	if (function_f(r, ks[ROUNDS - 1], output_f)	< 0)
-			return -1;
-
-	if (xor(output_xor, output_xor, output_f) < 0)
-		return -1;
-
-	if (initial_permutation_inv(output_xor, r, output) < 0)
-		return -1;
 
 	for (i = 0; i < ROUNDS; i++) {
 		free(ks[i]);
@@ -882,11 +896,18 @@ int decipher(uint8_t* input, uint8_t* output, uint8_t* k) {
 
 	int i;
 	int j;
+	int times;
+	int index;
+	int repets;
 	uint8_t l[34];
 	uint8_t r[34];
 	uint8_t** ks;
 	uint8_t output_f[36];
 	uint8_t output_xor[36];
+	uint8_t aux_input[66];
+	uint8_t aux_output[66];
+
+	output[0] = 2;
 
 	ks = (uint8_t **) malloc ((ROUNDS + 1) * sizeof(uint8_t *));
 	if (!ks)
@@ -901,37 +922,44 @@ int decipher(uint8_t* input, uint8_t* output, uint8_t* k) {
 	if (key_generator(k, ks) < 0)
 		return -1;
 
-	if (initial_permutation(input, l, r) < 0)
-		return -1;
+	times = intlen(input) / 64;
+	for (repets = 0, index = 0; repets < times; repets++, index += 64) {
+		intncpy(aux_input, input + index, 64);
 
-	if (function_f(r, ks[ROUNDS - 1], output_f)	< 0)
+		if (initial_permutation(aux_input, l, r) < 0)
 			return -1;
 
-	if (xor(output_xor, l, output_f) < 0)
-		return -1;
-
-	if (swap(output_xor, r) < 0)
+		if (function_f(r, ks[ROUNDS - 1], output_f)	< 0)
 			return -1;
 
-	for (i = (ROUNDS - 2); i >= 1; i--) {
-		if (function_f(r, ks[i], output_f)	< 0)
-			return -1;
-
-		if (xor(output_xor, output_xor, output_f) < 0)
+		if (xor(output_xor, l, output_f) < 0)
 			return -1;
 
 		if (swap(output_xor, r) < 0)
 			return -1;
-	}
 
-	if (function_f(r, ks[0], output_f)	< 0)
+		for (i = (ROUNDS - 2); i >= 1; i--) {
+			if (function_f(r, ks[i], output_f)	< 0)
+				return -1;
+
+			if (xor(output_xor, output_xor, output_f) < 0)
+				return -1;
+
+			if (swap(output_xor, r) < 0)
+				return -1;
+		}
+
+		if (function_f(r, ks[0], output_f)	< 0)
+				return -1;
+
+		if (xor(output_xor, output_xor, output_f) < 0)
 			return -1;
 
-	if (xor(output_xor, output_xor, output_f) < 0)
-		return -1;
+		if (initial_permutation_inv(output_xor, r, aux_output) < 0)
+			return -1;
 
-	if (initial_permutation_inv(output_xor, r, output) < 0)
-		return -1;
+		intcat(output, aux_output);
+	}
 
 	for (i = 0; i < ROUNDS; i++) {
 		free(ks[i]);
