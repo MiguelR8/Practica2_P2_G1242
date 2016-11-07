@@ -14,7 +14,6 @@ int main (int argc, char* argv[]) {
 	uint8_t* output;
 	char aux_k[9];
 	char strbuf[MAX_STR];
-	char* file_text = NULL;
 	
 	while (1) {
 		int option_index = 0;

@@ -96,7 +96,6 @@ int main (int argc, char* argv[]) {
 	}
 	
 	int len;
-	char* file_text = NULL;
 	
 	if (fin == stdin) {
 		while(!feof(fin) && !ferror(fin)) {
@@ -126,8 +125,6 @@ int main (int argc, char* argv[]) {
 }
 
 char* getRandomKey(int size) {
-	char alpha_perm[ALPHA_SIZE];
-	
 	char* key = (char *) calloc (size, sizeof(char));
 	if (key == NULL) {
 		return NULL;
@@ -259,6 +256,8 @@ int calcularProbabilidades(char* text, int len, modo m,
 	for (i = 0; i < KEYSPACE; i++) {
 		free(biasedKeys[i]);
 	}
+	
+	return 0;
 }
 
 int calcularProbabilidadesTexto(char* text, int len, FILE* outfile, modo m) {
@@ -380,7 +379,6 @@ char* getRandomBiasedKey(int size, char* base, double bias) {
 	if (k == NULL) {
 		return k;
 	}
-	int i, j;
 	
 	double p = getRandomLessN(101)/100.0;
 	

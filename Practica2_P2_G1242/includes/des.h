@@ -21,4 +21,7 @@ int initial_permutation(const uint8_t* src, uint8_t* l, uint8_t* r);
 int initial_permutation_inv(const uint8_t* l, const uint8_t* r, uint8_t* dst);
 
 int cipher(uint8_t* input, uint8_t* output, uint8_t* k);
+int cipherNRounds(int rounds, uint8_t* input, uint8_t* output, uint8_t* k);
+int cipherRoundN(int round, uint8_t* input, uint8_t* output, uint8_t* k);
+
 int decipher(uint8_t* input, uint8_t* output, uint8_t* k);

@@ -2,24 +2,28 @@ CC=gcc
 EXE1 = seg-perf
 EXE2 = desECB
 EXE3 = desNLTest
-EXE4 = aesNLTest
+EXE4 = desAvTest
+EXE5 = aesNLTest
 SRC=src/
 INC= includes/
 LIB=lib/
 
-all: $(EXE1) $(EXE2) $(EXE3) $(EXE4)
+all: $(EXE1) $(EXE2) $(EXE3) $(EXE4) $(EXE5)
 
 $(EXE1): $(SRC)$(EXE1).c $(SRC)algoritmos.c $(INC)algoritmos.h
-	$(CC) --std=c99 -g -o $@ $^
+	$(CC) --std=c99 -g -Wall -o $@ $^
 
 $(EXE2): $(SRC)$(EXE2).c $(SRC)algoritmos.c $(INC)algoritmos.h $(SRC)operations_bits.c $(INC)operations_bits.h $(SRC)des.c $(INC)des.h
-	$(CC) --std=c99 -g -o $(EXE2) $^ -lm
+	$(CC) --std=c99 -g -Wall -o $(EXE2) $^ -lm
 
 $(EXE3): $(SRC)nonlinearityDESTest.c
-	$(CC) --std=c99 -g -o $@ $^
+	$(CC) --std=c99 -g -Wall -o $@ $^
 
-$(EXE4): $(SRC)nonlinearityAESTest.c
-	$(CC) --std=c99 -g -o $@ $^
+$(EXE4): $(SRC)desAvalancheTest.c $(SRC)algoritmos.c $(INC)algoritmos.h $(SRC)operations_bits.c $(INC)operations_bits.h $(SRC)des.c $(INC)des.h
+	$(CC) --std=c99 -g -Wall -o $@ $^ -lm
+
+$(EXE5): $(SRC)nonlinearityAESTest.c
+	$(CC) --std=c99 -g -Wall -o $@ $^
 
 clean:
-	rm -f $(EXE1) $(EXE2) $(EXE3) $(EXE4)
+	rm -f $(EXE1) $(EXE2) $(EXE3) $(EXE4) $(EXE5)

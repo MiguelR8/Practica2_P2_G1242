@@ -64,6 +64,31 @@ int bits_to_string(const uint8_t* bits, char* string) {
 	return 0;
 }
 
+int bits_to_printable(const uint8_t* bits, char* string) {
+
+	if (!string || !bits)
+		return -1;
+
+	int i;
+	int len = intlen(bits);
+
+	//simple transformation in case source and destination coincide 
+	for (i = 0; i < len; i++) {
+		string[i] = bits[i] + '0';
+	}
+	
+	//swap (big-endian to little-endian)
+	for (i = 0; i < len/2; i++) {
+		string[i] 			= string[i] + string[len - 1 - i];	//x = x + y
+		string[len - 1 - i] = string[i] - string[len - 1 - i];	//y = x - y
+		string[i]			= string[i] - string[len - 1 - i];	//x = x - y
+	}
+
+	string[len] = '\0';
+	return 0;
+}
+
+
 int rotatory_left_shift_n(const uint8_t* array, uint8_t* array_shift, int n) {
 
 	if (!array || !array_shift)
@@ -224,7 +249,6 @@ int convertBinaryToDecimal(const uint8_t* n) {
 
 	int i;
 	int j;
-	int remainder;
 	int decimalNumber = 0;
 
     for (i = (intlen(n) - 1), j = 0; i >= 0; i--, j++) {

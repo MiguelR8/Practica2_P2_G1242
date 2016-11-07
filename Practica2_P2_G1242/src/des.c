@@ -146,7 +146,6 @@ int function_f(const uint8_t* r, const uint8_t* k, uint8_t* output) {
 
 	int i;
 	int j;
-	int l;
 	int row;
 	int column;
 	int index;
@@ -166,7 +165,7 @@ int function_f(const uint8_t* r, const uint8_t* k, uint8_t* output) {
 	/* 	Divide el resultador de (exp XOR k) en bloques de 6 bits
 		para realizar la sustitucion con las S-BOXES
 	*/
-	for (i = 0, j = 0, l = 0; i < intlen(exp); i+=6, j++) {
+	for (i = 0, j = 0; i < intlen(exp); i += 6, j++) {
 		intncpy(bits_per_box[j], exp + i, 6);
 	}
 
@@ -274,7 +273,6 @@ int cipher(uint8_t* input, uint8_t* output, uint8_t* k) {
 		return -1;
 
 	int i;
-	int j;
 	int times;
 	int index;
 	int repets;
@@ -348,13 +346,154 @@ int cipher(uint8_t* input, uint8_t* output, uint8_t* k) {
 	return 0;
 }
 
+int cipherNRounds(int rounds, uint8_t* input, uint8_t* output, uint8_t* k) {
+
+	if (!input || !output || !k || rounds > ROUNDS || rounds < 1)
+		return -1;
+
+	if (rounds == 1) {
+		return cipherRoundN(1, input, output, k);
+	}
+
+	int i;
+	int times;
+	int index;
+	int repets;
+	uint8_t l[34];
+	uint8_t r[34];
+	uint8_t** ks;
+	uint8_t aux_input[66];
+	uint8_t aux_output[66];
+	uint8_t output_f[36];
+	uint8_t output_xor[36];
+
+	output[0] = 2;
+
+	ks = (uint8_t **) malloc ((ROUNDS + 1) * sizeof(uint8_t *));
+	if (!ks)
+		return -1;
+
+	for (i = 0; i < ROUNDS; i++) {
+		ks[i] = (uint8_t *) malloc (50 * sizeof(uint8_t));
+		if (!ks[i])
+			return -1;
+	}
+
+	if (key_generator(k, ks) < 0)
+		return -1;
+
+	times = intlen(input) / 64;
+	for (repets = 0, index = 0; repets < times; repets++, index += 64) {
+		intncpy(aux_input, input + index, 64);
+
+		if (initial_permutation(aux_input, l, r) < 0)
+			return -1;
+
+		if (function_f(r, ks[0], output_f)	< 0)
+				return -1;
+
+		if (xor(output_xor, l, output_f) < 0)
+			return -1;
+
+		if (swap(output_xor, r) < 0)
+				return -1;
+
+		for (i = 1; i < (rounds - 1); i++) {
+			if (function_f(r, ks[i], output_f)	< 0)
+				return -1;
+
+			if (xor(output_xor, output_xor, output_f) < 0)
+				return -1;
+
+			if (swap(output_xor, r) < 0)
+				return -1;
+		}
+
+		if (function_f(r, ks[rounds - 1], output_f)	< 0)
+				return -1;
+
+		if (xor(output_xor, output_xor, output_f) < 0)
+			return -1;
+
+		if (initial_permutation_inv(output_xor, r, aux_output) < 0)
+			return -1;
+
+		intcat(output, aux_output);
+	}
+
+	for (i = 0; i < ROUNDS; i++) {
+		free(ks[i]);
+	}
+
+	free(ks);
+	return 0;
+}
+
+int cipherRoundN(int round, uint8_t* input, uint8_t* output, uint8_t* k) {
+
+	if (!input || !output || !k || round > ROUNDS || round < 1)
+		return -1;
+
+	int i;
+	int times;
+	int index;
+	int repets;
+	uint8_t l[34];
+	uint8_t r[34];
+	uint8_t** ks;
+	uint8_t aux_input[66];
+	uint8_t aux_output[66];
+	uint8_t output_f[36];
+	uint8_t output_xor[36];
+
+	output[0] = 2;
+
+	ks = (uint8_t **) malloc ((ROUNDS + 1) * sizeof(uint8_t *));
+	if (!ks)
+		return -1;
+
+	for (i = 0; i < ROUNDS; i++) {
+		ks[i] = (uint8_t *) malloc (50 * sizeof(uint8_t));
+		if (!ks[i])
+			return -1;
+	}
+
+	if (key_generator(k, ks) < 0)
+		return -1;
+
+	times = intlen(input) / 64;
+	for (repets = 0, index = 0; repets < times; repets++, index += 64) {
+		intncpy(aux_input, input + index, 64);
+
+		if (initial_permutation(aux_input, l, r) < 0)
+			return -1;
+
+		if (function_f(r, ks[round - 1], output_f)	< 0)
+				return -1;
+
+		if (xor(output_xor, l, output_f) < 0)
+			return -1;
+
+		if (initial_permutation_inv(output_xor, r, aux_output) < 0)
+			return -1;
+
+		intcat(output, aux_output);
+	}
+
+	for (i = 0; i < ROUNDS; i++) {
+		free(ks[i]);
+	}
+
+	free(ks);
+	return 0;
+}
+
 int decipher(uint8_t* input, uint8_t* output, uint8_t* k) {
 
 	if (!input || !output || !k)
 		return -1;
 
 	int i;
-	int j;
 	int times;
 	int index;
 	int repets;

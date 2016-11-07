@@ -10,6 +10,7 @@ int char_to_bits  (const char c, uint8_t* bits);
 int bits_to_char(const uint8_t* bits);
 int string_to_bits(const char* string, uint8_t* bits);
 int bits_to_string(const uint8_t* bits, char* string);
+int bits_to_printable(const uint8_t* bits, char* string);
 
 int rotatory_left_shift_n  (const uint8_t* array, uint8_t* array_shift, int n);
 

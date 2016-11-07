@@ -7,8 +7,6 @@
 
 #define MAX_STR 64
 
-typedef enum {CIFRAR, DESCIFRAR} modo;
-
 uint8_t areCoprime(uint8_t a, uint8_t b) {
 	uint8_t max, min;
 	if (a < 2 || b < 2) {
@@ -38,26 +36,26 @@ uint8_t countSetBits(uint8_t byte) {
 	return c;
 }
 
-uint8_t SBOX_hash (uint8_t byte, modo m) {
+uint8_t SBOX_hash (uint8_t byte) {
 	uint8_t row = (byte >> 2) & 0x03;
 	uint8_t column = byte & 0x03;
-
-	if (m == CIFRAR) {
-		return DIRECT_SBOX[row][column];
-	}
-	return INVERSE_SBOX[row][column];
+	
+	return DIRECT_SBOX[row][column];
 }
 
-void showConsecutiveDifferences(uint8_t max_n, modo m) {
+void showConsecutiveDifferences(uint8_t max_n) {
 	
-	uint8_t i, last;
+	uint8_t i, j, last;
 	uint8_t ic[ROWS_PER_SBOX + 1];
 	double mean, variance;
 	
 	uint8_t counts[0xFF];
 	
-	for (i = 1, last = SBOX_hash(0, m); 1; last = SBOX_hash(i++, m)) {
-		counts[i - 1] = countSetBits(last ^ SBOX_hash(i, m));
+	double total_mean = 0;
+	double total_variance = 0;
+	
+	for (i = 1, last = SBOX_hash(0); 1; last = SBOX_hash(i++)) {
+		counts[i - 1] = countSetBits(last ^ SBOX_hash(i));
 		if (i == max_n) {
 			break;
 		}
@@ -116,53 +114,41 @@ void showConsecutiveDifferences(uint8_t max_n, modo m) {
 			variance);
 }
 
-void showLinearDependences(uint8_t max_n, modo m) {
+void showLinearDependences(uint8_t max_n) {
 	uint8_t i, j;
 	uint32_t count;
 		
 	for (count = 0, i = max_n; i > 0; i--) {
 		for (j = i - 1; j > 0; j--) {
 			if (areCoprime(i, j) == 0) {
-				if (areCoprime(SBOX_hash(i, m), SBOX_hash(j, m)) == 0) {
+				if (areCoprime(SBOX_hash(i), SBOX_hash(j)) == 0) {
 					count++;
 				}
 			}
 		}
 	}
 	
-	//all possible pairings = (n-1)*(n+2)/2
-	double p = (2.0 * count * 100) / (0xFF * 0x102);
-	
-	printf("Se encontraron %hi (%lf%%) parejas de valores con dependencias lineales\n",
-				count, p);
+	printf("Se encontraron %hi parejas de valores con dependencias lineales\n",
+				count);
 }
 
 int main (int argc, char* argv[]) {
 	int c;
-	modo m = -1;
 	uint32_t n = 0, d = 0;
 	
 	while (1) {
 		int option_index = 0;
 		static struct option long_options[] = {
-		   {"C", no_argument, 0, 'C'},
-		   {"D", no_argument, 0, 'D'},
 		   {"n", required_argument, 0, 'n'},
 		   {"d", required_argument, 0, 'd'},
 		   {0, 0, 0, 0}
 		};
-		c = getopt_long(argc, argv, "CDn:d:",
+		c = getopt_long(argc, argv, "n:d:",
 			long_options, &option_index);
 		if (c < 0)
 			break;
 		
 		switch (c) {
-			case 'C':
-				m = CIFRAR;
-				break;
-			case 'D':
-				m = DESCIFRAR;
-				break;
 			case 'n':
 				n = atoi(optarg);
 				if (n > 0xFF || n < 1) {
@@ -178,23 +164,23 @@ int main (int argc, char* argv[]) {
 				}
 				break;
 			default:
-				printf("Uso: %s {-C | -D} [-n num_pruebas] [-d num_pruebas]\n", argv[0]);
+				printf("Uso: %s [-n num_pruebas] [-d num_pruebas]\n", argv[0]);
 				puts("n para probar cambios en entradas consecutivas");
 				puts("d para probar la independencia lineal");
 				return EXIT_FAILURE;
 		}
 	}
 	
-	if ((n == 0 && d == 0) || m == -1) {
-		printf("Uso: %s {-C | -D} [-n num_pruebas] [-d num_pruebas]\n", argv[0]);
+	if (n == 0 && d == 0) {
+		printf("Uso: %s [-n num_pruebas] [-d num_pruebas]\n", argv[0]);
 		puts("n para probar cambios en entradas consecutivas");
 		puts("d para probar independencia lineal");
 		return EXIT_FAILURE;
 	}
 	
 	if (n != 0)
-		showConsecutiveDifferences(n, m);
+		showConsecutiveDifferences(n);
 	if (d > 1)
-		showLinearDependences(d, m);
+		showLinearDependences(d);
 	return EXIT_SUCCESS;;
 }
