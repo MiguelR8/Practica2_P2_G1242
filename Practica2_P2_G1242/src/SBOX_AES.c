@@ -154,7 +154,8 @@ uint16_t polyMulInv(uint16_t a, uint16_t m) {
 }
 
 uint8_t byte_cipher(uint8_t byte, uint16_t m) {
-	uint8_t masks[8] = {0x8F, 0xC7, 0xE3, 0xF1, 0xF8, 0x7C, 0x3E, 0x1F};
+	//uint8_t masks[8] = {0x8F, 0xC7, 0xE3, 0xF1, 0xF8, 0x7C, 0x3E, 0x1F};
+	uint8_t masks[8] = {0xF8, 0x7C, 0x3E, 0x1F, 0x8F, 0xC7, 0xE3, 0xF1};
 	uint8_t res = 0;
 	uint8_t i;
 	//in case of 0 most operations will have no effect
@@ -187,8 +188,8 @@ uint8_t byte_decipher(uint8_t byte, uint16_t m) {
 }
 
 uint8_t SBOX_hash (uint8_t byte) {
-	uint8_t row = (byte >> 2) & 0x03;
-	uint8_t column = byte & 0x03;
+	uint8_t row = (byte >> 4) & 0x0F;
+	uint8_t column = byte & 0x0F;
 	
 	return DIRECT_SBOX[row][column];
 }
@@ -248,8 +249,8 @@ int main (int argc, char* argv[]) {
 	
 	//printf("%hX * %hX %% %hX = %hhX\n", a, b, m, polyMul(a, b, m));
 	for (a = 0; a < 0x100; a++) {
-		if (SBOX_hash(a) != byte_cipher(a, m)) {
-			printf("for %hX: %hhX != %hhX\n", a, SBOX_hash(a), byte_cipher(a, m));
+		if (polyMul(a, polyMulInv(a, m), m) != 1) {
+			printf("%hhX * %hhX != 1\n", a, polyMulInv(a, m));
 		}
 	}
 	return EXIT_SUCCESS;

@@ -152,8 +152,8 @@ int main (int argc, char* argv[]) {
 
 			printf("Read %d bytes\n", len);
 
-			toUpperAndNumbersOnly(strbuf);
-			len = strlen(strbuf);
+			//~ toUpperAndNumbersOnly(strbuf);
+			//~ len = strlen(strbuf);
 
 			// Añadimos padding en caso de que strbuf no sea multiplo de 64bits
 			if ((len % 8) != 0) {
