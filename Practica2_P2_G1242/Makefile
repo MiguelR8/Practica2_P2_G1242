@@ -4,11 +4,12 @@ EXE2 = desECB
 EXE3 = desNLTest
 EXE4 = desAvTest
 EXE5 = aesNLTest
+EXE6 = SBOX_AES
 SRC=src/
 INC= includes/
 LIB=lib/
 
-all: $(EXE1) $(EXE2) $(EXE3) $(EXE4) $(EXE5)
+all: $(EXE1) $(EXE2) $(EXE3) $(EXE4) $(EXE5) $(EXE6)
 
 $(EXE1): $(SRC)$(EXE1).c $(SRC)algoritmos.c $(INC)algoritmos.h
 	$(CC) --std=c99 -g -Wall -o $@ $^
@@ -25,5 +26,8 @@ $(EXE4): $(SRC)desAvalancheTest.c $(SRC)algoritmos.c $(INC)algoritmos.h $(SRC)op
 $(EXE5): $(SRC)nonlinearityAESTest.c
 	$(CC) --std=c99 -g -Wall -o $@ $^
 
+$(EXE6): $(SRC)$(EXE6).c
+	$(CC) --std=c99 -g -Wall -o $@ $^
+
 clean:
-	rm -f $(EXE1) $(EXE2) $(EXE3) $(EXE4) $(EXE5)
+	rm -f $(EXE1) $(EXE2) $(EXE3) $(EXE4) $(EXE5) $(EXE6)

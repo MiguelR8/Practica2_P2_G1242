@@ -7,26 +7,7 @@
 
 #define MAX_STR 64
 
-uint8_t areCoprime(uint8_t a, uint8_t b) {
-	uint8_t max, min;
-	if (a < 2 || b < 2) {
-		return 0xFF;
-	}
-	if (a > b) {
-		max = a;
-		min = b;
-	} else {
-		max = b;
-		min = a;
-	}
-	uint8_t mod = max % min;
-	if (mod > 1) {
-		return areCoprime(min, mod);
-	}
-	return mod;
-}
-
-uint8_t countSetBits(uint8_t byte) {
+uint64_t countSetBits(uint64_t byte) {
 	int c;
 	
 	for (c = 0; byte; byte >>= 1) {
@@ -36,100 +17,180 @@ uint8_t countSetBits(uint8_t byte) {
 	return c;
 }
 
+uint8_t degreeOf(uint16_t x) {
+	uint8_t i;
+	for (i = 0; x > 1; i++, x >>= 1);
+	return i;
+}
+
+//Euclid algorithm
+uint16_t polyGDC(uint16_t a, uint16_t b) {
+	uint16_t max = a > b ? a : b;
+	uint16_t min = a < b ? a : b;
+	
+	uint16_t r = max ^ (min << (degreeOf(max) - degreeOf(min)));
+	if (r == 0) {
+		return min;
+	}
+	return polyGDC(min, r);
+}
+
+//all pointers are optional
+void polyDiv(uint16_t n, uint16_t d, uint16_t* q, uint16_t* r) {
+	if (q == NULL && r == NULL) {
+		return;
+	}
+	int16_t i = 0;
+	if (q != NULL) {
+		*q = 0;
+	}
+	for (i = degreeOf(n) - degreeOf(d); i >= 0; i = degreeOf(n) - degreeOf(d)) {
+		n ^= (d << i);			//substract divisor multiplied by quotient
+		if (q != NULL) {
+			*q |= (1 << i);		//build q as it would be in a division on paper
+		}
+	}
+	if (r != NULL) {
+		*r = n;
+	}
+}
+
+uint8_t xtime (uint8_t x, uint8_t a, uint16_t m) {
+	uint16_t r;
+	if (x) {
+		//multiplication by x would need mod m
+		if (a & 0x80) {
+			polyDiv(0x100, m, NULL, &r);
+			a = (a << 1) ^ r;
+		} else {
+			a <<= 1;
+		}
+	}
+	return a;
+}
+
+//intended for m of at most degree 8, it would otherwise overflow
+uint8_t polyMul(uint8_t a, uint8_t b, uint16_t m) {
+	if (a > b) {	//swap for efficiency, perform xtime on smallest integer
+		a = a + b;
+		b = a - b;
+		a = a - b;
+	}
+	
+	uint8_t results[8] = {b,0,0,0,0,0,0,0};	//b is base case, multiplication by 1
+	uint8_t res = 0;
+	int8_t i, j;
+	
+	for (i = 0; i < 8; i++) {
+		if (a & (1 << i)) {
+			if (results[i] == 0) {
+				//find last calculated xtime
+				for (j = i - 1; results[j] == 0; j--);
+				for (; j < i; j++) {
+					results[j + 1] = xtime(1, results[j], m);
+				}
+			}
+			res ^= results[i];
+		}
+	}
+	return res;
+}
+
+//Extended Euclid algorithm used to find multiplicative inverse
+uint16_t polyMulInv(uint16_t a, uint16_t m) {
+	uint16_t max, min;
+	
+	if (a > m) {
+        max = a;
+        min = m;
+    } else {
+        max = m;
+        min = a;
+    }
+	
+	if (min == 0 || polyGDC(a, m) != 1) {
+        return 0;
+    } else if (min == 1) {
+		return 1;
+	}
+    uint16_t maxAux = max;
+    
+    uint16_t x1 = 0;
+    uint16_t x2 = 1;
+    uint16_t y1 = 1;
+    uint16_t y2 = 0;
+    uint16_t x, y;
+    
+    uint16_t r = 0;
+    uint16_t q;
+
+    while (r != 1) {
+		
+        // max = q*min + r
+        polyDiv(max, min, &q, &r);
+
+        // x2 - q*x1
+        x = x2 - q*x1;
+
+        // y2 - q*y1
+        y = y2 - q * y1;
+
+        // Reajustar valores
+        max = min;
+        min = r;
+        x2 = x1;
+        x1 = x;
+        y2 = y1;
+        y1 = y;
+    }
+
+	uint16_t inverse;
+    if (y < 0) {
+		inverse = maxAux + y;
+    } else {
+        inverse = y;
+    }
+    return inverse;
+}
+
+uint8_t byte_cipher(uint8_t byte, uint16_t m) {
+	uint8_t masks[8] = {0x8F, 0xC7, 0xE3, 0xF1, 0xF8, 0x7C, 0x3E, 0x1F};
+	uint8_t res = 0;
+	uint8_t i;
+	//in case of 0 most operations will have no effect
+	if (byte != 0) {
+		byte = polyMulInv(byte, m); //important, get multiplicative inverse first		 
+		for (i = 0; i < 8; i++) {
+			//apply mask, then add bits modulo 2 (same counting and getting LSB)
+			//then place in the respective ith position
+			res |= (countSetBits(byte & masks[i]) & 0x1) << i;
+		}
+	}
+	res ^= 0x63;
+	return res;
+}
+
+uint8_t byte_decipher(uint8_t byte, uint16_t m) {
+	uint8_t masks[8] = {0x25, 0x92, 0x49, 0xA4, 0x52, 0x29, 0x94, 0x4A};
+	uint8_t res = 0;
+	uint8_t i;
+	
+	if (byte != 0) {
+		for (i = 0; i < 8; i++) {	//multiply by mask matrix
+			res |= (countSetBits(byte & masks[i]) & 0x1) << i;
+		}
+	}
+	res ^= 0x05;				//add integer
+	if (res != 0)				//and get multiplicative inverse
+		res = polyMulInv(res, m);	
+	return res;
+}
+
 uint8_t SBOX_hash (uint8_t byte) {
 	uint8_t row = (byte >> 2) & 0x03;
 	uint8_t column = byte & 0x03;
 	
 	return DIRECT_SBOX[row][column];
-}
-
-void showConsecutiveDifferences(uint8_t max_n) {
-	
-	uint8_t i, j, last;
-	uint8_t ic[ROWS_PER_SBOX + 1];
-	double mean, variance;
-	
-	uint8_t counts[0xFF];
-	
-	double total_mean = 0;
-	double total_variance = 0;
-	
-	for (i = 1, last = SBOX_hash(0); 1; last = SBOX_hash(i++)) {
-		counts[i - 1] = countSetBits(last ^ SBOX_hash(i));
-		if (i == max_n) {
-			break;
-		}
-	}
-	//generate statistics (mean and variance of count and difference between succesives)
-
-	memset(ic, 0, ROWS_PER_SBOX + 1);
-	for (i = 0, mean = 0 ; i < max_n - 1; i++) {
-		mean += counts[i];
-		ic[counts[i]]++;
-	}
-	mean /= max_n - 1.0;
-	
-	printf("\tRecuento de diferencias usando n y n+1: ");
-	for(i = 0; i < ROWS_PER_SBOX + 1; i++) {
-		if (ic[i] != 0) {
-			printf("%d (%d) ", i, ic[i]);
-		}
-	}
-	putchar('\n');
-	
-	printf("\tMedia de diferencias usando n y n+1: %lf (%.2lf%%)\n",
-			mean, mean / ROWS_PER_SBOX * 100);
-	
-	for (i = 0, variance = 0; i < max_n - 1; i++) {
-		variance += (mean - counts[i]) * (mean - counts[i]);
-	}
-	
-	variance /= max_n - 1.0;
-	
-	printf("\tVarianza de diferencias usando n y n+1: %.3lf\n", variance);
-	
-	for (i = 1; i < max_n -1; i++) {
-		//absolute value of the difference
-		if (counts[i - 1] > counts[i]) {
-			counts[i - 1] -= counts[i];
-		} else {
-			counts[i - 1] = counts[i] - counts[i - 1];
-		}
-	}
-	
-	for (i = 0, mean = 0; i < max_n - 2; i++) {
-		mean += counts[i];
-	}
-	mean /= max_n - 2.0;
-	
-	printf("\tMedia de diferencias entre diferencias consecutivas: %.3lf\n",
-			mean);
-	
-	for (i = 0, variance = 0; i < max_n - 2; i++) {
-		variance += (mean - counts[i]) * (mean - counts[i]);
-	}
-	variance /= max_n - 2.0;
-	
-	printf("\tVarianza de diferencias entre diferencias consecutivas: %.3lf\n",
-			variance);
-}
-
-void showLinearDependences(uint8_t max_n) {
-	uint8_t i, j;
-	uint32_t count;
-		
-	for (count = 0, i = max_n; i > 0; i--) {
-		for (j = i - 1; j > 0; j--) {
-			if (areCoprime(i, j) == 0) {
-				if (areCoprime(SBOX_hash(i), SBOX_hash(j)) == 0) {
-					count++;
-				}
-			}
-		}
-	}
-	
-	printf("Se encontraron %hi parejas de valores con dependencias lineales\n",
-				count);
 }
 
 int main (int argc, char* argv[]) {
@@ -171,16 +232,25 @@ int main (int argc, char* argv[]) {
 		}
 	}
 	
-	if (n == 0 && d == 0) {
-		printf("Uso: %s [-n num_pruebas] [-d num_pruebas]\n", argv[0]);
-		puts("n para probar cambios en entradas consecutivas");
-		puts("d para probar independencia lineal");
-		return EXIT_FAILURE;
-	}
+	//~ if (n == 0 && d == 0) {
+		//~ printf("Uso: %s [-n num_pruebas] [-d num_pruebas]\n", argv[0]);
+		//~ puts("n para probar cambios en entradas consecutivas");
+		//~ puts("d para probar independencia lineal");
+		//~ return EXIT_FAILURE;
+	//~ }
 	
-	if (n != 0)
-		showConsecutiveDifferences(n);
-	if (d > 1)
-		showLinearDependences(d);
-	return EXIT_SUCCESS;;
+	uint16_t a = 0x5F;
+	//uint16_t b = 0x38;
+	uint16_t m = 0x11B;
+	//printf("mcd(%hX, %hX) = %hX\n", a, b, polyGDC(a, b));
+	//printf("%hX^-1 %% %hX = %hX\n", a, m, polyMulInv(a, m));
+	//printf("%hX^-1 %% %hX = %hX\n", b, m, polyMulInv(b, m));
+	
+	//printf("%hX * %hX %% %hX = %hhX\n", a, b, m, polyMul(a, b, m));
+	for (a = 0; a < 0x100; a++) {
+		if (SBOX_hash(a) != byte_cipher(a, m)) {
+			printf("for %hX: %hhX != %hhX\n", a, SBOX_hash(a), byte_cipher(a, m));
+		}
+	}
+	return EXIT_SUCCESS;
 }
