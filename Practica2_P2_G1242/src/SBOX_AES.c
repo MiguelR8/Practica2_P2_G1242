@@ -44,7 +44,7 @@ void polyDiv(uint16_t n, uint16_t d, uint16_t* q, uint16_t* r) {
 	if (q != NULL) {
 		*q = 0;
 	}
-	for (i = degreeOf(n) - degreeOf(d); i >= 0; i = degreeOf(n) - degreeOf(d)) {
+	for (i = degreeOf(n) - degreeOf(d); n > d; i = degreeOf(n) - degreeOf(d)) {
 		n ^= (d << i);			//substract divisor multiplied by quotient
 		if (q != NULL) {
 			*q |= (1 << i);		//build q as it would be in a division on paper
@@ -115,11 +115,8 @@ uint16_t polyMulInv(uint16_t a, uint16_t m) {
 	}
     uint16_t maxAux = max;
     
-    uint16_t x1 = 0;
-    uint16_t x2 = 1;
-    uint16_t y1 = 1;
-    uint16_t y2 = 0;
-    uint16_t x, y;
+    int16_t us[3] = {0, 1, 0};
+    int16_t vs[3] = {1, 0, 0};
     
     uint16_t r = 0;
     uint16_t q;
@@ -128,28 +125,30 @@ uint16_t polyMulInv(uint16_t a, uint16_t m) {
 		
         // max = q*min + r
         polyDiv(max, min, &q, &r);
+        printf("%hX = %hX * %hX + %hX\n", max, q, min, r);
 
-        // x2 - q*x1
-        x = x2 - q*x1;
+        // Un = Un-2 - q*Un-1
+        us[2] = us[0] - q * us[1];
+        printf("%hX = %hX - %hX * %hX\n", us[2], us[0], q, us[1]);
 
-        // y2 - q*y1
-        y = y2 - q * y1;
+        // Vn = Vn-2 - q*Vn-1
+        vs[2] = vs[0] - q * vs[1];
+        printf("%hX = %hX - %hX * %hX\n", vs[2], vs[0], q, vs[1]);
 
         // Reajustar valores
         max = min;
-        min = r;
-        x2 = x1;
-        x1 = x;
-        y2 = y1;
-        y1 = y;
+		min = r;
+		memmove(us, us + 1, 2 * sizeof(uint16_t));
+		memmove(vs, vs + 1, 2 * sizeof(uint16_t));
     }
 
 	uint16_t inverse;
-    if (y < 0) {
-		inverse = maxAux + y;
+    if (vs[2] < 0) {
+		inverse = maxAux + vs[2];
     } else {
-        inverse = y;
+        inverse = vs[2];
     }
+    printf("Inverse is %hX\n", inverse);
     return inverse;
 }
 
@@ -248,7 +247,7 @@ int main (int argc, char* argv[]) {
 	//printf("%hX^-1 %% %hX = %hX\n", b, m, polyMulInv(b, m));
 	
 	//printf("%hX * %hX %% %hX = %hhX\n", a, b, m, polyMul(a, b, m));
-	for (a = 0; a < 0x100; a++) {
+	for (a = 1; a < 0x100; a++) {
 		if (polyMul(a, polyMulInv(a, m), m) != 1) {
 			printf("%hhX * %hhX != 1\n", a, polyMulInv(a, m));
 		}
