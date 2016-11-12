@@ -6,6 +6,9 @@
 #include <stdint.h>
 
 #define MAX_STR 64
+#define MODULO_POLYNOMIAL 0x11B
+
+enum modo {CIFRAR, DESCIFRAR};
 
 uint64_t countSetBits(uint64_t byte) {
 	int c;
@@ -44,7 +47,7 @@ void polyDiv(uint16_t n, uint16_t d, uint16_t* q, uint16_t* r) {
 	if (q != NULL) {
 		*q = 0;
 	}
-	for (i = degreeOf(n) - degreeOf(d); n > d; i = degreeOf(n) - degreeOf(d)) {
+	for (i = degreeOf(n) - degreeOf(d); i >= 0; i = degreeOf(n) - degreeOf(d)) {
 		n ^= (d << i);			//substract divisor multiplied by quotient
 		if (q != NULL) {
 			*q |= (1 << i);		//build q as it would be in a division on paper
@@ -115,8 +118,8 @@ uint16_t polyMulInv(uint16_t a, uint16_t m) {
 	}
     uint16_t maxAux = max;
     
-    int16_t us[3] = {0, 1, 0};
-    int16_t vs[3] = {1, 0, 0};
+    uint16_t us[3] = {1, 0, 0};
+    uint16_t vs[3] = {0, 1, 0};
     
     uint16_t r = 0;
     uint16_t q;
@@ -125,15 +128,12 @@ uint16_t polyMulInv(uint16_t a, uint16_t m) {
 		
         // max = q*min + r
         polyDiv(max, min, &q, &r);
-        printf("%hX = %hX * %hX + %hX\n", max, q, min, r);
 
         // Un = Un-2 - q*Un-1
-        us[2] = us[0] - q * us[1];
-        printf("%hX = %hX - %hX * %hX\n", us[2], us[0], q, us[1]);
+        us[2] = us[0] ^ polyMul(q, us[1], m);
 
         // Vn = Vn-2 - q*Vn-1
-        vs[2] = vs[0] - q * vs[1];
-        printf("%hX = %hX - %hX * %hX\n", vs[2], vs[0], q, vs[1]);
+        vs[2] = vs[0] ^ polyMul(q, vs[1], m);
 
         // Reajustar valores
         max = min;
@@ -143,41 +143,46 @@ uint16_t polyMulInv(uint16_t a, uint16_t m) {
     }
 
 	uint16_t inverse;
-    if (vs[2] < 0) {
-		inverse = maxAux + vs[2];
+    if (vs[2] > maxAux) {
+		inverse = maxAux ^ vs[2];
     } else {
         inverse = vs[2];
     }
-    printf("Inverse is %hX\n", inverse);
     return inverse;
 }
 
 uint8_t byte_cipher(uint8_t byte, uint16_t m) {
-	//uint8_t masks[8] = {0x8F, 0xC7, 0xE3, 0xF1, 0xF8, 0x7C, 0x3E, 0x1F};
-	uint8_t masks[8] = {0xF8, 0x7C, 0x3E, 0x1F, 0x8F, 0xC7, 0xE3, 0xF1};
-	uint8_t res = 0;
-	uint8_t i;
+	uint8_t bitOffsets[5] = {4, 5, 6, 7, 8};
+	uint8_t res = 0, buf;
+	uint8_t i, j;
 	//in case of 0 most operations will have no effect
 	if (byte != 0) {
 		byte = polyMulInv(byte, m); //important, get multiplicative inverse first		 
 		for (i = 0; i < 8; i++) {
-			//apply mask, then add bits modulo 2 (same counting and getting LSB)
-			//then place in the respective ith position
-			res |= (countSetBits(byte & masks[i]) & 0x1) << i;
+			//b'i = b(i + 4 % 8) + b(i + 5 % 8) + b(i + 6 % 8) + b(i + 7 % 8) + b(i + 8 % 8)
+			for (j = 0; j < 5; j++) {
+				buf = byte & (1 << ((i + bitOffsets[j]) % 8));
+				res ^= (buf ? 1:0) << i;
+			}
 		}
 	}
+	//b'i += 0x63
 	res ^= 0x63;
 	return res;
 }
 
 uint8_t byte_decipher(uint8_t byte, uint16_t m) {
-	uint8_t masks[8] = {0x25, 0x92, 0x49, 0xA4, 0x52, 0x29, 0x94, 0x4A};
-	uint8_t res = 0;
-	uint8_t i;
+	uint8_t bitOffsets[3] = {2, 5, 7};
+	uint8_t res = 0, buf;
+	uint8_t i, j;
 	
 	if (byte != 0) {
-		for (i = 0; i < 8; i++) {	//multiply by mask matrix
-			res |= (countSetBits(byte & masks[i]) & 0x1) << i;
+		for (i = 0; i < 8; i++) {
+			//b'i = b(i + 2 % 8) + b(i + 5 % 8) + b(i + 7 % 8)
+			for (j = 0; j < 3; j++) {
+				buf = byte & (1 << ((i + bitOffsets[j]) % 8));
+				res ^= (buf ? 1:0) << i;
+			}
 		}
 	}
 	res ^= 0x05;				//add integer
@@ -193,64 +198,80 @@ uint8_t SBOX_hash (uint8_t byte) {
 	return DIRECT_SBOX[row][column];
 }
 
+uint8_t SBOX_unhash (uint8_t byte) {
+	uint8_t row = (byte >> 4) & 0x0F;
+	uint8_t column = byte & 0x0F;
+	
+	return INVERSE_SBOX[row][column];
+}
+
 int main (int argc, char* argv[]) {
 	int c;
-	uint32_t n = 0, d = 0;
+	uint8_t i, j;
+	uint8_t m = 0xFF;
+	FILE* fout = NULL;
 	
 	while (1) {
 		int option_index = 0;
 		static struct option long_options[] = {
-		   {"n", required_argument, 0, 'n'},
-		   {"d", required_argument, 0, 'd'},
+		   {"C", no_argument, 0, 'D'},
+		   {"D", no_argument, 0, 'C'},
+		   {"o", required_argument, 0, 'o'},
 		   {0, 0, 0, 0}
 		};
-		c = getopt_long(argc, argv, "n:d:",
+		c = getopt_long(argc, argv, "CDo:",
 			long_options, &option_index);
 		if (c < 0)
 			break;
 		
 		switch (c) {
-			case 'n':
-				n = atoi(optarg);
-				if (n > 0xFF || n < 1) {
-					printf("n debe ser menor que 255 y mayor que 1\n");
-					return EXIT_FAILURE;
-				}
+			case 'C':
+				m = CIFRAR;
 				break;
-			case 'd':
-				d = atoi(optarg);
-				if (d > 0xFF || d < 2) {
-					printf("d debe ser menor que 255 y mayor que 2\n");
+			case 'D':
+				m = DESCIFRAR;
+				break;
+			case 'o':
+				fout = fopen(optarg, "w");
+				if (fout == NULL) {
+					perror("Al abrir el archivo para escribir");
 					return EXIT_FAILURE;
 				}
 				break;
 			default:
-				printf("Uso: %s [-n num_pruebas] [-d num_pruebas]\n", argv[0]);
-				puts("n para probar cambios en entradas consecutivas");
-				puts("d para probar la independencia lineal");
+				printf("Uso: %s {-C | -D} [-o fileout]\n", argv[0]);
 				return EXIT_FAILURE;
 		}
 	}
 	
-	//~ if (n == 0 && d == 0) {
-		//~ printf("Uso: %s [-n num_pruebas] [-d num_pruebas]\n", argv[0]);
-		//~ puts("n para probar cambios en entradas consecutivas");
-		//~ puts("d para probar independencia lineal");
-		//~ return EXIT_FAILURE;
-	//~ }
-	
-	uint16_t a = 0x5F;
-	//uint16_t b = 0x38;
-	uint16_t m = 0x11B;
-	//printf("mcd(%hX, %hX) = %hX\n", a, b, polyGDC(a, b));
-	//printf("%hX^-1 %% %hX = %hX\n", a, m, polyMulInv(a, m));
-	//printf("%hX^-1 %% %hX = %hX\n", b, m, polyMulInv(b, m));
-	
-	//printf("%hX * %hX %% %hX = %hhX\n", a, b, m, polyMul(a, b, m));
-	for (a = 1; a < 0x100; a++) {
-		if (polyMul(a, polyMulInv(a, m), m) != 1) {
-			printf("%hhX * %hhX != 1\n", a, polyMulInv(a, m));
-		}
+	if (m == 0xFF) {
+		printf("Uso: %s {-C | -D} [-o fileout]\n", argv[0]);
+		return EXIT_FAILURE;
 	}
+	
+	if (fout == NULL) {
+		fout = stdout;
+	}
+	fputc('\t', fout);
+	for (i = 0; i < 0x10; i++) {
+		fprintf(fout, "%hhX\t", i);
+	}
+	fputc('\n', fout);
+	
+	for (i = 0; i < 0x10; i++) {
+		fprintf(fout, "%hhX\t", i);
+		for (j = 0; j < 0x10; j++) {
+			if (m == CIFRAR) {
+				fprintf(fout, "%02hhx\t", byte_cipher((i << 4) | j,
+						MODULO_POLYNOMIAL));
+			} else {
+				fprintf(fout, "%02hhx\t", byte_decipher((i << 4) | j,
+						MODULO_POLYNOMIAL));
+			}
+		}
+		fputc('\n', fout);
+	}
+	
+	fclose(fout);
 	return EXIT_SUCCESS;
 }
