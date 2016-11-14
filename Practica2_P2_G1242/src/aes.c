@@ -44,3 +44,48 @@ void mixColumns(uint8_t* state, uint8_t nb) {
 		}
 	}
 }
+
+uint8_t* getRoundKeys(uint8_t* key, uint8_t nk, uint8_t nb, uint8_t nr) {
+	uint32_t* roundKeys = (uint32_t*) malloc(nk*(nr+1)*sizeof(uint32_t));
+	if (roundKeys == NULL) {
+		return NULL;
+	}
+	//save space keeping obly most significant byte
+	uint8_t* rcon = (uint8_t*) calloc((nb*(nr+1)) * sizeof(uint8_t));	
+	if (rcon == NULL) {
+		free(roundKeys);
+		return NULL;
+	}
+	uint32_t tmp;
+	uint8_t i;
+	
+	//rcon starts at 1 or 2?
+	for(rcon[0] = 0x01, i = 1; i < nb*(nr+1); i++) {
+		rcon[i] = polyMul(rcon[i-1], 0x02, MODULO_POLYNOMIAL);
+	}
+	
+	//see fips 197, page 24
+	for(i = 0; i < nk; i++) {
+		roundKeys[i] = bytesToWord(key[4*i + 3], key[4*i + 2], key[4*i + 1],
+				key[4*i]);
+	}
+	
+	for (i = nk; i < nb*(nr+1); i++) {
+		tmp = roundKeys[i-1];
+		if ((i % nk) == 0) {
+			tmp = rotateNBits(tmp, 32, -8);
+			tmp = bytesToWord(byteSub(tmp >> 24),
+					byteSub(tmp >> 16), byteSub( tmp >> 8),
+					byteSub(tmp));
+			tmp ^= rcon[i/nk] << 24;
+		} else if (nk > 6 && (i%nk) == 4) {
+			tmp = bytesToWord(byteSub(tmp >> 24),
+					byteSub(tmp >> 16), byteSub( tmp >> 8),
+					byteSub(tmp));
+		}
+		roundKeys[i] = roundKeys[i - nk] ^ tmp;
+	}
+	
+	free(rcon);
+	return roundKeys;
+}

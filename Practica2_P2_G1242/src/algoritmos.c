@@ -212,6 +212,13 @@ uint64_t rotateNBits (uint64_t word, uint8_t len, int8_t positions) {
 	return word & nBitFilter(len);
 }
 
+uint32_t bytesToWord(uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
+	return (a << 24)
+			| (b << 16)
+			| (c << 8)
+			| d
+}
+
 uint8_t degreeOf(uint16_t x) {
 	uint8_t i;
 	for (i = 0; x > 1; i++, x >>= 1);
@@ -350,10 +357,7 @@ uint32_t wordPolyMul(uint32_t a, uint32_t b) {
 	uint32_t am[4];
 	
 	//a1 a2 a3 a0 (little-endian)
-	am[0] = (((a >> 8) & 0xFF) << 24)
-			| (((a >> 16) & 0xFF) << 16)
-			| ((a >> 24) << 8)
-			| (a & 0xFF);
+	am[0] = bytesToWord(a >> 8, a >> 16, a >> 24, a & 0xFF);
 	for (i = 1; i < 4; i++) {
 		am[i] = rotateNBits(am[0], 32, 8 * i);
 	}
