@@ -1,26 +1,6 @@
 #include "../includes/des.h"
-#include <arpa/inet.h>
 
 enum test_type {CLAVE, ENTRADA};
-
-uint64_t countSetBits(uint64_t byte) {
-	int c;
-	
-	for (c = 0; byte; byte >>= 1) {
-		c += byte & 0x01;
-	}
-	
-	return c;
-}
-
-uint64_t invertNthbit (uint64_t word, uint8_t bit) {
-	if (bit > 63)
-		return word;
-	uint64_t nbit = word & (1L << bit);
-	nbit = (~nbit) & (1L << bit); 	//preserve the mask, but invert the bit
-	word &= ~(1L << bit);			//preserve all other bits
-	return word | nbit;
-}
 
 void showNRoundsCipherChange(int rounds, uint64_t data, uint64_t key, int test) {
 	

@@ -356,6 +356,33 @@ void showTotalLinearDependence(uint8_t max_n) {
  lineales para todas las cajas S\n", count);
 }
 
+
+void showTotalLinearXORDependence(uint64_t max_n) {
+	
+	if (max_n > 0x00FFFFFF) {
+		max_n = 0x00FFFFFF;
+	}
+	
+	uint64_t i, j;
+	uint16_t count, ids;
+		
+	for (count = 0, ids = 0, i = 0; i < max_n; i++) {
+		for (j = 0; j <= i; j++) {
+			if (SBOX_hash_complete(i + j)
+					== (SBOX_hash_complete(i) ^ SBOX_hash_complete(j))) {
+				count++;
+				if (i == j) {
+					ids++;
+				}
+			}
+		}
+	}
+	
+	printf("Se encontraron %hi parejas de valores con dependencias\
+ lineales para todas las cajas S, de las cuales %hi son parejas\
+ del mismo numero\n", count, ids);
+}
+
 int main (int argc, char* argv[]) {
 	int c;
 	uint8_t n = 0;
@@ -401,6 +428,7 @@ int main (int argc, char* argv[]) {
 				printf("Uso: %s [-n num_pruebas] [-k num_pruebas]\
  [-d num_pruebas]\n", argv[0]);
 				puts("n y k para probar cambios en entradas consecutivas (n para cajas S individuales)");
+				puts("k tambien para probar independencia lineal por XOR");
 				puts("d para probar independencia lineal por determinantes de matrices");
 				return EXIT_FAILURE;
 		}
@@ -410,14 +438,17 @@ int main (int argc, char* argv[]) {
 		printf("Uso: %s [-n num_pruebas] [-k num_pruebas]\
  [-d num_pruebas]\n", argv[0]);
 		puts("n y k para probar cambios en entradas consecutivas (n para cajas S individuales)");
+		puts("k tambien para probar independencia lineal por XOR");
 		puts("d para probar independencia lineal por determinantes de matrices");
 		return EXIT_FAILURE;
 	}
 	
 	if (n != 0)
 		showIndividualConsecutiveDifferences(n);
-	if (k != 0)
+	if (k != 0) {
 		showTotalConsecutiveDifferences(k);
+		showTotalLinearXORDependence(k);
+	}
 	if (d > 1) {
 		showIndividualLinearDependences(d);
 		showTotalLinearDependence(d);

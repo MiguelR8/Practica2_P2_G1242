@@ -26,7 +26,7 @@ $(EXE4): $(SRC)desAvalancheTest.c $(SRC)algoritmos.c $(INC)algoritmos.h $(SRC)op
 $(EXE5): $(SRC)nonlinearityAESTest.c
 	$(CC) --std=c99 -g -Wall -o $@ $^
 
-$(EXE6): $(SRC)$(EXE6).c
+$(EXE6): $(SRC)$(EXE6).c $(SRC)algoritmos.c $(INC)algoritmos.h
 	$(CC) --std=c99 -g -Wall -o $@ $^
 
 clean:
