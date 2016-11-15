@@ -216,7 +216,7 @@ uint32_t bytesToWord(uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
 	return (a << 24)
 			| (b << 16)
 			| (c << 8)
-			| d
+			| d;
 }
 
 uint8_t degreeOf(uint16_t x) {

@@ -35,23 +35,53 @@ void mixColumns(uint8_t* state, uint8_t nb) {
 	uint8_t i, j;
 	uint32_t col;
 	for (i = 0; i < nb; i++) {
-		col = wordPolyMul(MIX_COLUMN_POLYNOMIAL, (state[4 * i + 3] << 24)
-				| (state[4 * i + 2] << 16)
-				| (state[4 * i + 1] << 8)
-				| state[4 * i]);
+		col = wordPolyMul(MIX_COLUMN_POLYNOMIAL, bytesToWord(state[4 * i + 3],
+				state[4 * i + 2],
+				state[4 * i + 1],
+				state[4 * i]));
 		for (j = 0; j < 4; j++) {
 			state[4 * i + j] = col >> (j*8);
 		}
 	}
 }
 
-uint8_t* getRoundKeys(uint8_t* key, uint8_t nk, uint8_t nb, uint8_t nr) {
-	uint32_t* roundKeys = (uint32_t*) malloc(nk*(nr+1)*sizeof(uint32_t));
+uint8_t* generate_AES_k(uint8_t nk, char* savefile) {
+	uint8_t i;
+	FILE* f = NULL;
+	char word[23];
+	
+	uint8_t* k = malloc(4 * nk * sizeof(uint8_t));
+	if (k != NULL) {
+		if (savefile != NULL) {
+			f = fopen(savefile, "w");
+		}
+		
+		for (i = 0; i < 4 * nk; i++) {
+			k[i] = random();
+			if (f != NULL && i > 0 && i % 4 == 0) {
+				sprintf(word, "%u ", bytesToWord(k[i-1], k[i-2], k[i-3], k[i-4]));
+				fwrite(word, sizeof(char), strlen(word), f);
+			}
+		}
+		//write final word
+		if (f != NULL) {
+			if (i > 0 && i % 4 == 0) {
+				sprintf(word, "%u \n", bytesToWord(k[i-1], k[i-2], k[i-3], k[i-4]));
+				fwrite(word, sizeof(char), strlen(word), f);
+			}
+			fclose(f);
+		}
+	}
+	return k;
+}
+
+uint32_t* getRoundKeys(uint8_t* key, uint8_t nk, uint8_t nb, uint8_t nr) {
+	uint32_t* roundKeys = (uint32_t*) malloc(nk * (nr + 1) * sizeof(uint32_t));
 	if (roundKeys == NULL) {
 		return NULL;
 	}
 	//save space keeping obly most significant byte
-	uint8_t* rcon = (uint8_t*) calloc((nb*(nr+1)) * sizeof(uint8_t));	
+	uint8_t* rcon = (uint8_t*) calloc(nb * (nr + 1), sizeof(uint8_t));	
 	if (rcon == NULL) {
 		free(roundKeys);
 		return NULL;
@@ -88,4 +118,13 @@ uint8_t* getRoundKeys(uint8_t* key, uint8_t nk, uint8_t nb, uint8_t nr) {
 	
 	free(rcon);
 	return roundKeys;
+}
+
+int cipher(uint8_t* in_state, uint8_t* out_state, uint8_t* key, uint8_t nk,
+		uint8_t nb, uint8_t nr) {
+	return 0;		
+}
+int decipher(uint8_t* in_state, uint8_t* out_state, uint8_t* key, uint8_t nk,
+		uint8_t nb, uint8_t nr) {
+	return 0;		
 }

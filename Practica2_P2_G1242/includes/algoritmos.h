@@ -38,9 +38,9 @@ void fitArray(char* array, int posEle, int arraySize);
 //some useful byte operations
 uint64_t countSetBits(uint64_t byte);
 uint64_t invertNthbit (uint64_t word, uint8_t bit);
-uint64_t nBitFilter (uint8_t len);										//testing needed
-uint64_t rotateNBits (uint64_t word, uint8_t len, int8_t positions);	//testing needed
-uint32_t bytesToWord(uint8_t a, uint8_t b, uint8_t c, uint8_t d);		//testing needed
+uint64_t nBitFilter (uint8_t len);
+uint64_t rotateNBits (uint64_t word, uint8_t len, int8_t positions);
+uint32_t bytesToWord(uint8_t a, uint8_t b, uint8_t c, uint8_t d);		//args from most to least significance
 
 //byte polynomial functions
 uint8_t degreeOf(uint16_t x);
