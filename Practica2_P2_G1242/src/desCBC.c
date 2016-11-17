@@ -10,9 +10,11 @@ int main (int argc, char* argv[]) {
 	FILE* fin = NULL;
 	FILE* fout = NULL;
 	uint8_t* k = NULL;
+	uint8_t* iv = NULL;
 	uint8_t* input;
 	uint8_t* output;
-	char aux_k[9];
+	char aux_k[25];
+	char aux_iv[9];
 	char strbuf[MAX_STR];
 	
 	while (1) {
@@ -21,11 +23,12 @@ int main (int argc, char* argv[]) {
 		   {"C", no_argument, 0, 'C'},
 		   {"D", no_argument, 0, 'D'},
 		   {"k", required_argument, 0, 'k'},
+		   {"v", required_argument, 0, 'v'},
 		   {"i", required_argument, 0, 'i'},
 		   {"o", required_argument, 0, 'o'},
 		   {0, 0, 0, 0}
 		};
-		c = getopt_long(argc, argv, "CDk:i:o:",
+		c = getopt_long(argc, argv, "CDk:v:i:o:",
 			long_options, &option_index);
 		if (c < 0)
 			break;
@@ -41,13 +44,29 @@ int main (int argc, char* argv[]) {
 				strcpy(aux_k, optarg);
 
 				// 64 bits y el numero 2 como fin de cadena
-				k = (uint8_t *) malloc ((DES_ECB_K_SIZE + 1) * sizeof(uint8_t));
+				k = (uint8_t *) malloc ((DES_CBC_K_SIZE + 1) * sizeof(uint8_t));
 				if (!k) {
 					printf("Error al reservar memoria.\n");
 					return EXIT_FAILURE;
 				}
 
 				if (string_to_bits(aux_k, k) < 0) {
+					printf("Error al pasar la cadena a bits\n");
+					free(k);
+					return EXIT_FAILURE;
+				}
+				break;
+			case 'v':
+				strcpy(aux_iv, optarg);
+
+				// 64 bits y el numero 2 como fin de cadena
+				iv = (uint8_t *) malloc (66 * sizeof(uint8_t));
+				if (!iv) {
+					printf("Error al reservar memoria.\n");
+					return EXIT_FAILURE;
+				}
+
+				if (string_to_bits(aux_iv, iv) < 0) {
 					printf("Error al pasar la cadena a bits\n");
 					free(k);
 					return EXIT_FAILURE;
@@ -74,7 +93,7 @@ int main (int argc, char* argv[]) {
 				}
 				break;
 			default:
-				printf("Uso: %s {-C|-D -k clave} [-i filein] [-o fileout]\n", argv[0]);
+				printf("Uso: %s {-C|-D -k clave -v IV} [-i filein] [-o fileout]\n", argv[0]);
 				if (fout != NULL) {
 					fclose(fout);
 				}
@@ -86,7 +105,7 @@ int main (int argc, char* argv[]) {
 	}
 	
 	if (modo == -1) {
-		printf("Uso: %s {-C|-D -k clave} [-i filein] [-o fileout]\n", argv[0]);
+		printf("Uso: %s {-C|-D -k clave -v IV} [-i filein] [-o fileout]\n", argv[0]);
 		if (fout != NULL) {
 			fclose(fout);
 		}
@@ -97,8 +116,8 @@ int main (int argc, char* argv[]) {
 		return EXIT_FAILURE;
 	}
 
-	if (modo == DESCIFRAR && !k) {
-		printf("Uso: %s {-C|-D -k clave} [-i filein] [-o fileout]\n", argv[0]);
+	if (modo == DESCIFRAR && !k && !iv) {
+		printf("Uso: %s {-C|-D -k clave -v IV} [-i filein] [-o fileout]\n", argv[0]);
 		if (fout != NULL) {
 			fclose(fout);
 		}
@@ -134,19 +153,37 @@ int main (int argc, char* argv[]) {
 
 		if (modo == CIFRAR) {
 			// 64 bits y el numero 2 como fin de cadena
-			k = (uint8_t *) malloc ((DES_ECB_K_SIZE + 1) * sizeof(uint8_t));
+			k = (uint8_t *) malloc ((DES_CBC_K_SIZE + 1) * sizeof(uint8_t));
 			if (!k) {
 				printf("Error al reservar memoria.\n");
 				return EXIT_FAILURE;
 			}
 
-			generate_k(aux_k, 8);
+			generate_k(aux_k, 24);
 
 			printf("La clave utilizada es: %s\n", aux_k);
 
 			if (string_to_bits(aux_k, k) < 0) {
 				printf("Error al pasar la cadena a bits\n");
 				free(k);
+				return EXIT_FAILURE;
+			}
+
+			iv = (uint8_t *) malloc (66 * sizeof(uint8_t));
+			if (!iv) {
+				printf("Error al reservar memoria.\n");
+				free(k);
+				return EXIT_FAILURE;
+			}
+
+			generate_k(aux_iv, 8);
+
+			printf("El vector de inicializacion (IV) utilizado es: %s\n", aux_iv);
+
+			if (string_to_bits(aux_iv, iv) < 0) {
+				printf("Error al pasar la cadena a bits\n");
+				free(k);
+				free(iv);
 				return EXIT_FAILURE;
 			}
 
@@ -160,6 +197,7 @@ int main (int argc, char* argv[]) {
 				if (len < 8) {
 					if (add_n_padding(strbuf, strbuf, 8 - len) < 0) {
 						free(k);
+						free(iv);
 						return EXIT_FAILURE;
 					}
 				} else {
@@ -167,6 +205,7 @@ int main (int argc, char* argv[]) {
 					n_to_add = (8 * (n_to_add + 1)) - len;
 					if (add_n_padding(strbuf, strbuf, n_to_add) < 0) {
 						free(k);
+						free(iv);
 						return EXIT_FAILURE;
 					}
 				}
@@ -177,25 +216,29 @@ int main (int argc, char* argv[]) {
 			input = (uint8_t *) malloc (((8 * (len)) + 2) * sizeof(uint8_t));
 			if (!input) {
 				free(k);
+				free(iv);
 				return EXIT_FAILURE;
 			}
 
 			output = (uint8_t *) malloc (((8 * len) + 2) * sizeof(uint8_t));
 			if (!output) {
 				free(k);
+				free(iv);
 				free(input);
 				return EXIT_FAILURE;
 			}
 
 			if (string_to_bits(strbuf, input) < 0) {
 				free(k);
+				free(iv);
 				free(input);
 				free(output);
 				return EXIT_FAILURE;
 			}
 			
-			if (cipher_des_ecb(input, output, k) < 0) {
+			if (cipher_des_cbc(input, output, k, iv) < 0) {
 				free(k);
+				free(iv);
 				free(input);
 				free(output);
 				return EXIT_FAILURE;
@@ -204,8 +247,6 @@ int main (int argc, char* argv[]) {
 			for (i = 0; i < intlen(output); ++i) {
 				fprintf(fout, "%d ", output[i]);
 			}
-
-			fprintf(fout, "\n");
 
 		} else {
 			input = (uint8_t *) malloc ((len + 2) * sizeof(uint8_t));
@@ -227,12 +268,14 @@ int main (int argc, char* argv[]) {
 			output = (uint8_t *) malloc (len * sizeof(uint8_t));
 			if (!output) {
 				free(k);
+				free(iv);
 				free(input);
 				return EXIT_FAILURE;
 			}
 
-			if (decipher_des_ecb(input, output, k) < 0) {
+			if (decipher_des_cbc(input, output, k, iv) < 0) {
 				free(k);
+				free(iv);
 				free(input);
 				free(output);
 				return EXIT_FAILURE;
@@ -240,13 +283,13 @@ int main (int argc, char* argv[]) {
 
 			if (bits_to_string(output, strbuf) < 0) {
 				free(k);
+				free(iv);
 				free(input);
 				free(output);
 				return EXIT_FAILURE;
 			}
 
 			fwrite(strbuf, strlen(strbuf), sizeof(char), fout);
-			fwrite("\n", 1, sizeof(char), fout);
 		}
 
 		free(input);
