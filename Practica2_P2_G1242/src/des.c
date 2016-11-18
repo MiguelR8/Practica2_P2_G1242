@@ -1,22 +1,22 @@
 #include "../includes/des.h"
 
-int generate_k(char* k) {
+int generate_k(char* k, int size_k) {
 
-	if (!k)
+	if (!k || size_k <= 0)
 		return -1;
 
 	int i;
 	int random;
 
-	for (i = 0; i < 8; i++) {
+	for (i = 0; i < size_k; i++) {
 		random = getRandomLessN(2);
 
 		// Generacion de letra
 		if (random) {
-			k[i] = getRandomFromMAddN(65, 26);
+			k[i] = getRandomFromMAddN('A', 'Z' - 'A');
 
 		} else { // Generacion de numero
-			k[i] = getRandomFromMAddN(48, 11);
+			k[i] = getRandomFromMAddN('0', '9' - '0');
 		}
 	}
 
@@ -267,20 +267,15 @@ int swap(uint8_t* a, uint8_t* b) {
 	return 0;
 }
 
-int cipher(uint8_t* input, uint8_t* output, uint8_t* k) {
+int cipher_des(uint8_t* input, uint8_t* output, uint8_t* k) {
 
 	if (!input || !output || !k)
 		return -1;
 
 	int i;
-	int times;
-	int index;
-	int repets;
 	uint8_t l[34];
 	uint8_t r[34];
 	uint8_t** ks;
-	uint8_t aux_input[66];
-	uint8_t aux_output[66];
 	uint8_t output_f[36];
 	uint8_t output_xor[36];
 
@@ -299,44 +294,37 @@ int cipher(uint8_t* input, uint8_t* output, uint8_t* k) {
 	if (key_generator(k, ks) < 0)
 		return -1;
 
-	times = intlen(input) / 64;
-	for (repets = 0, index = 0; repets < times; repets++, index += 64) {
-		intncpy(aux_input, input + index, 64);
+	if (initial_permutation(input, l, r) < 0)
+		return -1;
 
-		if (initial_permutation(aux_input, l, r) < 0)
+	if (function_f(r, ks[0], output_f)	< 0)
 			return -1;
 
-		if (function_f(r, ks[0], output_f)	< 0)
-				return -1;
+	if (xor(output_xor, l, output_f) < 0)
+		return -1;
 
-		if (xor(output_xor, l, output_f) < 0)
+	if (swap(output_xor, r) < 0)
 			return -1;
 
-		if (swap(output_xor, r) < 0)
-				return -1;
-
-		for (i = 1; i < (ROUNDS - 1); i++) {
-			if (function_f(r, ks[i], output_f)	< 0)
-				return -1;
-
-			if (xor(output_xor, output_xor, output_f) < 0)
-				return -1;
-
-			if (swap(output_xor, r) < 0)
-				return -1;
-		}
-
-		if (function_f(r, ks[ROUNDS - 1], output_f)	< 0)
-				return -1;
+	for (i = 1; i < (ROUNDS - 1); i++) {
+		if (function_f(r, ks[i], output_f)	< 0)
+			return -1;
 
 		if (xor(output_xor, output_xor, output_f) < 0)
 			return -1;
 
-		if (initial_permutation_inv(output_xor, r, aux_output) < 0)
+		if (swap(output_xor, r) < 0)
+			return -1;
+	}
+
+	if (function_f(r, ks[ROUNDS - 1], output_f)	< 0)
 			return -1;
 
-		intcat(output, aux_output);
-	}
+	if (xor(output_xor, output_xor, output_f) < 0)
+		return -1;
+
+	if (initial_permutation_inv(output_xor, r, output) < 0)
+		return -1;
 
 	for (i = 0; i < ROUNDS; i++) {
 		free(ks[i]);
@@ -344,6 +332,207 @@ int cipher(uint8_t* input, uint8_t* output, uint8_t* k) {
 
 	free(ks);
 	return 0;
+}
+
+int decipher_des(uint8_t* input, uint8_t* output, uint8_t* k) {
+
+	if (!input || !output || !k)
+		return -1;
+
+	int i;
+	uint8_t l[34];
+	uint8_t r[34];
+	uint8_t** ks;
+	uint8_t output_f[36];
+	uint8_t output_xor[36];
+
+	output[0] = 2;
+
+	ks = (uint8_t **) malloc ((ROUNDS + 1) * sizeof(uint8_t *));
+	if (!ks)
+		return -1;
+
+	for (i = 0; i < ROUNDS; i++) {
+		ks[i] = (uint8_t *) malloc (50 * sizeof(uint8_t));
+		if (!ks[i])
+			return -1;
+	}
+
+	if (key_generator(k, ks) < 0)
+		return -1;
+
+	if (initial_permutation(input, l, r) < 0)
+		return -1;
+
+	if (function_f(r, ks[ROUNDS - 1], output_f)	< 0)
+		return -1;
+
+	if (xor(output_xor, l, output_f) < 0)
+		return -1;
+
+	if (swap(output_xor, r) < 0)
+		return -1;
+
+	for (i = (ROUNDS - 2); i >= 1; i--) {
+		if (function_f(r, ks[i], output_f)	< 0)
+			return -1;
+
+		if (xor(output_xor, output_xor, output_f) < 0)
+			return -1;
+
+		if (swap(output_xor, r) < 0)
+			return -1;
+	}
+
+	if (function_f(r, ks[0], output_f)	< 0)
+			return -1;
+
+	if (xor(output_xor, output_xor, output_f) < 0)
+		return -1;
+
+	if (initial_permutation_inv(output_xor, r, output) < 0)
+		return -1;
+
+	for (i = 0; i < ROUNDS; i++) {
+		free(ks[i]);
+	}
+
+	free(ks);
+	return 0;
+}
+
+int cipher_des_ecb(uint8_t* input, uint8_t* output, uint8_t* k) {
+
+	if (!input || !output || !k)
+		return -1;
+
+	int times;
+	int index;
+	int repets;
+	uint8_t aux_input[66];
+	uint8_t aux_output[66];
+
+	output[0] = 2;
+
+	times = intlen(input) / 64;
+	for (repets = 0, index = 0; repets < times; repets++, index += 64) {
+		intncpy(aux_input, input + index, 64);
+
+		if (cipher_des(aux_input, aux_output, k) < 0)
+			return -1;
+
+		intcat(output, aux_output);
+	}
+
+	return 0;
+}
+
+int cipher_des_cbc(uint8_t* input, uint8_t* output, uint8_t* k, uint8_t* iv) {
+
+	if (!input || !output || !k || !iv)
+		return -1;
+
+	int i;
+	int times;
+	int index;
+	int repets;
+	uint8_t keys[3][66];
+	uint8_t aux_input[66];
+	uint8_t aux_output[66];
+
+	output[0] = 2;
+
+	for (i = 0, index = 0; i < 3; i++, index+=64) {
+		intcpy(keys[i], k + index);
+	}
+
+	times = intlen(input) / 64;
+	for (repets = 0, index = 0; repets < times; repets++, index += 64) {
+		intncpy(aux_input, input + index, 64);
+
+		if (xor(aux_input, aux_input, iv) < 0)
+			return -1;
+
+		if (cipher_des(aux_input, aux_output, keys[0]) < 0)
+			return -1;
+
+		if (decipher_des(aux_output, aux_input, keys[1]) < 0)
+			return -1;
+
+		if (cipher_des(aux_input, aux_output, keys[2]) < 0)
+			return -1;
+
+		intcat(output, aux_output);
+	}
+
+	return 0;	
+}
+
+int decipher_des_ecb(uint8_t* input, uint8_t* output, uint8_t* k) {
+
+	if (!input || !output || !k)
+		return -1;
+
+	int times;
+	int index;
+	int repets;
+	uint8_t aux_input[66];
+	uint8_t aux_output[66];
+
+	output[0] = 2;
+
+	times = intlen(input) / 64;
+	for (repets = 0, index = 0; repets < times; repets++, index += 64) {
+		intncpy(aux_input, input + index, 64);
+
+		if (decipher_des(aux_input, aux_output, k) < 0)
+			return -1;
+
+		intcat(output, aux_output);
+	}
+
+	return 0;
+}
+
+int decipher_des_cbc(uint8_t* input, uint8_t* output, uint8_t* k, uint8_t* iv) {
+
+	if (!input || !output || !k || !iv)
+		return -1;
+
+	int i;
+	int times;
+	int index;
+	int repets;
+	uint8_t aux_input[66];
+	uint8_t aux_output[66];
+	uint8_t keys[3][66];
+
+	output[0] = 2;
+
+	for (i = 0, index = 0; i < 3; i++, index+=64) {
+		intcpy(keys[i], k + index);
+	}
+
+	times = intlen(input) / 64;
+	for (repets = 0, index = 0; repets < times; repets++, index += 64) {
+		intncpy(aux_input, input + index, 64);
+
+		if (decipher_des(aux_input, aux_output, keys[2]) < 0)
+			return -1;
+
+		if (cipher_des(aux_output, aux_input, keys[1]) < 0)
+			return -1;
+
+		if (decipher_des(aux_input, aux_output, keys[0]) < 0)
+			return -1;
+
+		if (xor(aux_output, aux_output, iv) < 0)
+			return -1;
+
+		intcat(output, aux_output);
+	}
+
+	return 0;	
 }
 
 int cipherNRounds(int rounds, uint8_t* input, uint8_t* output, uint8_t* k) {
@@ -472,85 +661,6 @@ int cipherRoundN(int round, uint8_t* input, uint8_t* output, uint8_t* k) {
 				return -1;
 
 		if (xor(output_xor, l, output_f) < 0)
-			return -1;
-
-		if (initial_permutation_inv(output_xor, r, aux_output) < 0)
-			return -1;
-
-		intcat(output, aux_output);
-	}
-
-	for (i = 0; i < ROUNDS; i++) {
-		free(ks[i]);
-	}
-
-	free(ks);
-	return 0;
-}
-
-int decipher(uint8_t* input, uint8_t* output, uint8_t* k) {
-
-	if (!input || !output || !k)
-		return -1;
-
-	int i;
-	int times;
-	int index;
-	int repets;
-	uint8_t l[34];
-	uint8_t r[34];
-	uint8_t** ks;
-	uint8_t output_f[36];
-	uint8_t output_xor[36];
-	uint8_t aux_input[66];
-	uint8_t aux_output[66];
-
-	output[0] = 2;
-
-	ks = (uint8_t **) malloc ((ROUNDS + 1) * sizeof(uint8_t *));
-	if (!ks)
-		return -1;
-
-	for (i = 0; i < ROUNDS; i++) {
-		ks[i] = (uint8_t *) malloc (50 * sizeof(uint8_t));
-		if (!ks[i])
-			return -1;
-	}
-
-	if (key_generator(k, ks) < 0)
-		return -1;
-
-	times = intlen(input) / 64;
-	for (repets = 0, index = 0; repets < times; repets++, index += 64) {
-		intncpy(aux_input, input + index, 64);
-
-		if (initial_permutation(aux_input, l, r) < 0)
-			return -1;
-
-		if (function_f(r, ks[ROUNDS - 1], output_f)	< 0)
-			return -1;
-
-		if (xor(output_xor, l, output_f) < 0)
-			return -1;
-
-		if (swap(output_xor, r) < 0)
-			return -1;
-
-		for (i = (ROUNDS - 2); i >= 1; i--) {
-			if (function_f(r, ks[i], output_f)	< 0)
-				return -1;
-
-			if (xor(output_xor, output_xor, output_f) < 0)
-				return -1;
-
-			if (swap(output_xor, r) < 0)
-				return -1;
-		}
-
-		if (function_f(r, ks[0], output_f)	< 0)
-				return -1;
-
-		if (xor(output_xor, output_xor, output_f) < 0)
 			return -1;
 
 		if (initial_permutation_inv(output_xor, r, aux_output) < 0)

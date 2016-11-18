@@ -13,7 +13,6 @@
 
 #define MAX_STR 512
 #define ALPHA_SIZE 26
-#define DES_K_SIZE 64 
 #define MODULO_POLYNOMIAL 0x11B
 
 typedef enum MODO {EQUIPROBABLE, DISPAR, CIFRAR, DESCIFRAR} modo;
