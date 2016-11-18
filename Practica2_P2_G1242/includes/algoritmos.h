@@ -50,5 +50,5 @@ uint8_t xtime (uint8_t x, uint8_t a, uint16_t m);
 uint8_t polyMul(uint8_t a, uint8_t b, uint16_t m);
 uint16_t polyMulInv(uint16_t a, uint16_t m);
 
-uint32_t wordPolyMul(uint32_t a, uint32_t b);	//assumes x⁴+1 as the modulo //testing needed
+uint32_t wordPolyMul(uint32_t a, uint32_t b);	//assumes x⁴+1 as the modulo
 

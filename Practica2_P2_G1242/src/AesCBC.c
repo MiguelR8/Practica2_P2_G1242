@@ -107,11 +107,6 @@ int main (int argc, char* argv[]) {
 		}
 	}
 	
-	printf("%x * %x  = %x\n", 0x05060708, MIX_COLUMN_POLYNOMIAL,
-			wordPolyMul(0x05060708, MIX_COLUMN_POLYNOMIAL));
-	printf("%x * %x  = %x\n", 0xACBD1526, MIX_COLUMN_POLYNOMIAL,
-			wordPolyMul(0xACBD1526, MIX_COLUMN_POLYNOMIAL));
-	
 	if (modo == -1) {
 		printf("Uso: %s {-C|-D -k clave} [-i filein] [-o fileout]\n", argv[0]);
 		if (fout != NULL) {
@@ -124,7 +119,7 @@ int main (int argc, char* argv[]) {
 		return EXIT_FAILURE;
 	}
 
-	/*if (modo == DESCIFRAR && (k[0] == 0 && k[1] == 0 && k[2] == 0 && k[3] == 0)) {
+	if (modo == DESCIFRAR && kfile == NULL) {
 		printf("Uso: %s {-C|-D -k clave} [-i filein] [-o fileout]\n", argv[0]);
 		if (fout != NULL) {
 			fclose(fout);
@@ -141,19 +136,24 @@ int main (int argc, char* argv[]) {
 	}
 	if (fout == NULL) {
 		fout = stdout;
-	}*/
+	}
 	
 	uint8_t* input = (uint8_t*) calloc(4 * NB, sizeof(uint8_t));
 	if (input == NULL) {
 		perror("Al reservar memoria para el estado inicial");
 		free(k);
+		fclose(fin);
+		fclose(fout);
 		return EXIT_FAILURE;
 	}
+	
 	uint8_t* output = (uint8_t*) calloc(4 * NB, sizeof(uint8_t));
 	if (output == NULL) {
 		perror("Al reservar memoria para el estado inicial");
 		free(k);
 		free(input);
+		fclose(fin);
+		fclose(fout);
 		return EXIT_FAILURE;
 	}
 	
@@ -169,7 +169,7 @@ int main (int argc, char* argv[]) {
 		
 		printf("La clave utilizada es: ");
 		for (i = 0; i < 4; i++) {
-			printf("%x ", k[i]);
+			printf("%08x ", k[i]);
 		}
 		putchar('\n');
 	}

@@ -186,27 +186,52 @@ uint64_t invertNthbit (uint64_t word, uint8_t bit) {
 }
 
 uint64_t nBitFilter (uint8_t len) {
+	uint64_t res = 0;
+	uint32_t* p = (uint32_t*)(&res);
+	if (len >= 32) {
+		p[0] = 0xFFFFFFFF;
+		p[1] = (1 << (len - 32)) - 1;
+		return res;
+	}
 	return (1 << len) - 1;
 }
 
 uint64_t rotateNBits (uint64_t word, uint8_t len, int8_t positions) {
-	if (positions > 64 || positions < -64) {
-		positions %= 65;
-	}
+	positions %= 64;
 	if (len > 64) {
 		len = 64;
 	}
 	
-	uint8_t i, b, abs = positions > 0 ? positions : -positions;
-	
-	for (i = 0; i < abs; i++) {
-		//rotate clockwise
-		if (positions > 0) {
-			b = (word >> (len - 1)) & 1;
-			word = (word << 1) | b;
-		} else {	//rotate counterclockwise
-			b = word & 1;
-			word = (word >> 1) | (b << (len - 1));
+	uint8_t i, b, c, abs = positions > 0 ? positions : -positions;
+	uint32_t* wp = (uint32_t*)(&word);
+	//<< and >> operators only work within the 32-bit boundary
+	if (len <= 32) { 
+		for (i = 0; i < abs; i++) {
+			//rotate clockwise
+			if (positions > 0) {
+				b = (word >> (len - 1)) & 1;
+				word = (word << 1) | b;
+			} else {	//rotate counterclockwise
+				b = word & 1;
+				word = ((word >> 1) | (b << (len - 1))) & nBitFilter(len);
+			}
+		}
+	} else {
+		for (i = 0; i < abs; i++) {
+			//rotate clockwise
+			if (positions > 0) {
+				//b == last
+				b = (wp[1] >> (len - 1 -32)) & 1;
+				//c == first
+				c = wp[0] >> 31;
+				wp[0] = (wp[0] << 1) | b;
+				wp[1] = ((wp[1] << 1) | c) & nBitFilter(len - 32);
+			} else {	//rotate counterclockwise
+				//b == last
+				b = wp[0] & 1;
+				wp[0] = (wp[0] >> 1) | ((wp[1] >> 1) << 31);
+				wp[1] = ((b << (len -32 -1)) | (wp[1] >> 1)) & nBitFilter(len - 32);
+			}
 		}
 	}
 	return word & nBitFilter(len);
@@ -364,10 +389,9 @@ uint32_t wordPolyMul(uint32_t a, uint32_t b) {
 	
 	for (i = 0; i < 4; i++) {
 		d[i] = 0;
-		for (j = 0; j < 64; j += 8) {
-			// x & 0xFF implicit in conversion to uint8_t
+		for (j = 0; j < 32; j += 8) {
 			d[i] ^= polyMul(am[i] >> j, b >> j, MODULO_POLYNOMIAL);
 		}
 	}
-	return (d[3] << 24) | (d[2] << 16) | (d[1] << 8) | d[0];
+	return bytesToWord(d[3], d[2], d[1], d[0]);
 }
