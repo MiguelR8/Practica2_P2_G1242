@@ -97,14 +97,14 @@ uint32_t* generate_AES_k(uint8_t nk, char* savefile) {
 		for (i = 0; i < 4 * nk; i++) {
 			k[i] = random();
 			if (f != NULL && i > 0 && i % 4 == 0) {
-				sprintf(word, "%u ", bytesToWord(k[i-1], k[i-2], k[i-3], k[i-4]));
+				sprintf(word, "%X ", bytesToWord(k[i-1], k[i-2], k[i-3], k[i-4]));
 				fwrite(word, sizeof(char), strlen(word), f);
 			}
 		}
 		//write final word
 		if (f != NULL) {
 			if (i > 0 && i % 4 == 0) {
-				sprintf(word, "%u \n", bytesToWord(k[i-1], k[i-2], k[i-3], k[i-4]));
+				sprintf(word, "%X \n", bytesToWord(k[i-1], k[i-2], k[i-3], k[i-4]));
 				fwrite(word, sizeof(char), strlen(word), f);
 			}
 			fclose(f);
@@ -163,7 +163,7 @@ uint32_t* getRoundKeys(uint8_t* key, uint8_t nk, uint8_t nb, uint8_t nr) {
 	return roundKeys;
 }
 
-int cipher(uint8_t* in_state, uint8_t* out_state, uint8_t* key, uint8_t nk,
+int cipher_aes(uint8_t* in_state, uint8_t* out_state, uint8_t* key, uint8_t nk,
 		uint8_t nb, uint8_t nr) {
 	uint8_t i, j;
 	memcpy(out_state, in_state, 4 * nb * sizeof(uint8_t));  
@@ -193,7 +193,7 @@ int cipher(uint8_t* in_state, uint8_t* out_state, uint8_t* key, uint8_t nk,
 	free(rks);
 	return 0;
 }
-int decipher(uint8_t* in_state, uint8_t* out_state, uint8_t* key, uint8_t nk,
+int decipher_aes(uint8_t* in_state, uint8_t* out_state, uint8_t* key, uint8_t nk,
 		uint8_t nb, uint8_t nr) {
 	uint8_t i, j;
 	memcpy(out_state, in_state, 4 * nb * sizeof(uint8_t));  
@@ -224,3 +224,61 @@ int decipher(uint8_t* in_state, uint8_t* out_state, uint8_t* key, uint8_t nk,
 	free(rks);
 	return 0;
 }
+
+int cipher_aes_cbc(char* input, int len, char* output, uint8_t* IV, uint8_t* key,
+		uint8_t nk) {
+	//nb is constant, but nr depends on key size as well
+	uint8_t nr = NB + nk + 2;
+	uint8_t buf_block[CIPHER_BLOCK_SIZE];
+	uint16_t i, j;
+	
+	for (i = 0; i < len; i += CIPHER_BLOCK_SIZE) {
+		//move input to buffer and pad if necessary
+		if (i + CIPHER_BLOCK_SIZE > len) {
+			memcpy(buf_block, input + i, (len - i) * sizeof(uint8_t));
+			memset(buf_block + (len - i), 0, CIPHER_BLOCK_SIZE - (len - i));
+		} else {
+			memcpy(buf_block, input + i, CIPHER_BLOCK_SIZE * sizeof(uint8_t));
+		}
+		
+		//add previous block or IV
+		for(j = 0; j < CIPHER_BLOCK_SIZE; j++) {
+			if (i == 0) {
+				buf_block[j] ^= IV[j];
+			} else {
+				buf_block[j] ^= output[(i - CIPHER_BLOCK_SIZE) + j];
+			}
+		}
+		//cipher and save to output
+		if (cipher_aes(buf_block, (uint8_t*)output + i, key, nk, NB, nr)  < 0) {
+			return -1;
+		}
+	}
+	return 0;
+}
+int decipher_aes_cbc(char* input, int len, char* output, uint8_t* IV, uint8_t* key,
+		uint8_t nk) {
+	uint8_t nr = NB + nk + 2;
+	uint16_t i, j;
+	
+	for (i = 0; i < len; i += CIPHER_BLOCK_SIZE) {
+		//cipher and save to output
+		if (decipher_aes((uint8_t*)input + i, (uint8_t*)output + i, key, nk, NB, nr)  < 0) {
+			return -1;
+		}
+		
+		//add previous block or IV
+		for(j = 0; j < CIPHER_BLOCK_SIZE; j++) {
+			if (i == 0) {
+				output[j] ^= IV[j];
+			} else {
+				output[i + j] ^= input[(i - CIPHER_BLOCK_SIZE) + j];
+			}
+		}
+	}
+	return 0;
+}
+		
+		
+		
+		

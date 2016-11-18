@@ -12,7 +12,10 @@ int main (int argc, char* argv[]) {
 		return EXIT_FAILURE;
 	}
 	
-	char strbuf[MAX_STR];
+	char strbuf[MAX_STR + CIPHER_BLOCK_SIZE];
+	char strout[MAX_STR + CIPHER_BLOCK_SIZE];
+	uint8_t IV[CIPHER_BLOCK_SIZE];
+	memset(IV, 0, CIPHER_BLOCK_SIZE * sizeof(uint8_t));
 	char* p;
 	
 	while (1) {
@@ -54,7 +57,7 @@ int main (int argc, char* argv[]) {
 				fclose(kfile);
 				
 				for (i = 0, p = strbuf; i < 4; i++) {
-					k[i] = strtoul(p, &p, 10); 
+					k[i] = strtoul(p, &p, 16); 
 					//nothing was read or end of input was read before getting all words
 					if (p == strbuf || (*p == '\0' && i != 3)) {
 						break;
@@ -138,32 +141,13 @@ int main (int argc, char* argv[]) {
 		fout = stdout;
 	}
 	
-	uint8_t* input = (uint8_t*) calloc(4 * NB, sizeof(uint8_t));
-	if (input == NULL) {
-		perror("Al reservar memoria para el estado inicial");
-		free(k);
-		fclose(fin);
-		fclose(fout);
-		return EXIT_FAILURE;
-	}
-	
-	uint8_t* output = (uint8_t*) calloc(4 * NB, sizeof(uint8_t));
-	if (output == NULL) {
-		perror("Al reservar memoria para el estado inicial");
-		free(k);
-		free(input);
-		fclose(fin);
-		fclose(fout);
-		return EXIT_FAILURE;
-	}
-	
 	if (modo == CIFRAR) {
 		free(k);
 		k = (uint32_t*)generate_AES_k(NK, "clave.txt");
 		if (!k) {
 			printf("Error al reservar memoria.\n");
-			free(input);
-			free(output);
+			fclose(fin);
+			fclose(fout);
 			return EXIT_FAILURE;
 		}
 		
@@ -174,7 +158,7 @@ int main (int argc, char* argv[]) {
 		putchar('\n');
 	}
 
-	/*while(!feof(fin) && !ferror(fin)) {
+	while(!feof(fin) && !ferror(fin)) {
 		if (fin == stdin) {
 			fgets(strbuf, MAX_STR, fin);
 			if(feof(fin)) {
@@ -187,26 +171,31 @@ int main (int argc, char* argv[]) {
 			}
 		} else {
 			len = fread(strbuf, sizeof(char), MAX_STR, fin);
-			strbuf[len] = '\0';
 		}
 		
-		printf("Read %d bytes\n", len);
-
 		if (modo == CIFRAR) {
-			if (cipher(input, output, (uint8_t*)k, NK, NB, NR) < 0) {
+			if (cipher_aes_cbc(strbuf, len, strout, IV, (uint8_t*)k, NK) < 0) {
+				perror("Al cifrar");
 				free(k);
-				free(input);
+				fclose(fin);
+				fclose(fout);
 				return EXIT_FAILURE;
 			}
 		} else {
-			if (decipher(input, output, (uint8_t*)k, NK, NB, NR) < 0) {
+			if (decipher_aes_cbc(strbuf, len, strout, IV, (uint8_t*)k, NK) < 0) {
+				perror("Al descifrar");
 				free(k);
-				free(input);
+				fclose(fin);
+				fclose(fout);
 				return EXIT_FAILURE;
 			}
 		}
-		fwrite(output, sizeof(uint8_t), 4 * NB, fout);
-	}*/
+		//round up to nearest block size multiple
+		if (len % CIPHER_BLOCK_SIZE) {
+			len += CIPHER_BLOCK_SIZE - (len % CIPHER_BLOCK_SIZE);
+		}
+		fwrite(strout, sizeof(uint8_t), len, fout);
+	}
 
 	if (fin != NULL) {
 		fclose(fin);
@@ -216,8 +205,6 @@ int main (int argc, char* argv[]) {
 	}
 
 	free(k);
-	free(input);
-	free(output);
 
-	return EXIT_SUCCESS;;
+	return EXIT_SUCCESS;
 }
