@@ -30,19 +30,25 @@ int pc_1(const uint8_t* src, uint8_t* c, uint8_t* d) {
 		return -1;
 
 	int i;
-	int j = 0;
-
-	for (i = 0; i < BITS_IN_PC1/2; i++, j++) {
-		c[i] = src[PC1[j] - 1];
+	uint8_t aux_byte[9];
+	
+	c[0] = 2;
+	for (i = 7; i < BITS_IN_IP/2; i += 8) {
+		intncpy(aux_byte, src + i - 7, 7);
+		if (get_odd_parity(aux_byte) != src[i]) {
+			return -1;
+		}
+		intcat(c, aux_byte);
 	}
-
-	c[i] = 2;
-
-	for (i = 0; i < BITS_IN_PC1/2; i++, j++) {
-		d[i] = src[PC1[j] - 1];
+	
+	d[0] = 2;
+	for (; i < BITS_IN_IP; i += 8) {
+		intncpy(aux_byte, src + i - 7, 7);
+		if (get_odd_parity(aux_byte) != src[i]) {
+			return -1;
+		}
+		intcat(d, aux_byte);
 	}
-
-	d[i] = 2;
 
 	return 0;
 }
@@ -69,12 +75,13 @@ int key_generator(const uint8_t* k, uint8_t** ks) {
 		return -1;
 
 	int i;
-	uint8_t c[29];
-	uint8_t d[29];
-	uint8_t cat_c_d[57];
-	uint8_t aux_k[49];
+	uint8_t c[BITS_28];
+	uint8_t d[BITS_28];
+	uint8_t cat_c_d[BITS_56];
+	uint8_t aux_k[BITS_48];
 
 	// C0 y D0
+	
 	if (pc_1(k, c, d) < 0)
 		return -1;
 
@@ -152,9 +159,9 @@ int function_f(const uint8_t* r, const uint8_t* k, uint8_t* output) {
 	uint8_t bits[NUM_S_BOXES][6];
 	uint8_t row_bits[4];
 	uint8_t column_bits[6];
-	uint8_t exp[50];
+	uint8_t exp[BITS_48];
 	uint8_t bits_per_box[NUM_S_BOXES][8];
-	uint8_t after_sustitution[34];
+	uint8_t after_sustitution[BITS_32];
 
 	if (expansion(r, exp) < 0)
 		return -1;
@@ -232,7 +239,7 @@ int initial_permutation_inv(const uint8_t* l, const uint8_t* r, uint8_t* dst) {
 		return -1;
 
 	int i;
-	uint8_t src[66];
+	uint8_t src[BITS_64];
 
 	if (intcpy(src, l) < 0)
 		return -1;
@@ -273,11 +280,11 @@ int cipher_des(uint8_t* input, uint8_t* output, uint8_t* k) {
 		return -1;
 
 	int i;
-	uint8_t l[34];
-	uint8_t r[34];
+	uint8_t l[BITS_32];
+	uint8_t r[BITS_32];
 	uint8_t** ks;
-	uint8_t output_f[36];
-	uint8_t output_xor[36];
+	uint8_t output_f[BITS_32];
+	uint8_t output_xor[BITS_32];
 
 	output[0] = 2;
 
@@ -286,7 +293,7 @@ int cipher_des(uint8_t* input, uint8_t* output, uint8_t* k) {
 		return -1;
 
 	for (i = 0; i < ROUNDS; i++) {
-		ks[i] = (uint8_t *) malloc (50 * sizeof(uint8_t));
+		ks[i] = (uint8_t *) malloc (BITS_48 * sizeof(uint8_t));
 		if (!ks[i])
 			return -1;
 	}
@@ -340,11 +347,11 @@ int decipher_des(uint8_t* input, uint8_t* output, uint8_t* k) {
 		return -1;
 
 	int i;
-	uint8_t l[34];
-	uint8_t r[34];
+	uint8_t l[BITS_32];
+	uint8_t r[BITS_32];
 	uint8_t** ks;
-	uint8_t output_f[36];
-	uint8_t output_xor[36];
+	uint8_t output_f[BITS_32];
+	uint8_t output_xor[BITS_32];
 
 	output[0] = 2;
 
@@ -409,8 +416,8 @@ int cipher_des_ecb(uint8_t* input, uint8_t* output, uint8_t* k) {
 	int times;
 	int index;
 	int repets;
-	uint8_t aux_input[66];
-	uint8_t aux_output[66];
+	uint8_t aux_input[BITS_64];
+	uint8_t aux_output[BITS_64];
 
 	output[0] = 2;
 
@@ -436,9 +443,9 @@ int cipher_des_cbc(uint8_t* input, uint8_t* output, uint8_t* k, uint8_t* iv) {
 	int times;
 	int index;
 	int repets;
-	uint8_t keys[3][66];
-	uint8_t aux_input[66];
-	uint8_t aux_output[66];
+	uint8_t keys[3][BITS_64];
+	uint8_t aux_input[BITS_64];
+	uint8_t aux_output[BITS_64];
 
 	output[0] = 2;
 
@@ -450,8 +457,13 @@ int cipher_des_cbc(uint8_t* input, uint8_t* output, uint8_t* k, uint8_t* iv) {
 	for (repets = 0, index = 0; repets < times; repets++, index += 64) {
 		intncpy(aux_input, input + index, 64);
 
-		if (xor(aux_input, aux_input, iv) < 0)
-			return -1;
+		if (repets == 0) {
+			if (xor(aux_input, aux_input, iv) < 0)
+				return -1;
+		} else {
+			if (xor(aux_input, aux_input, aux_output) < 0)
+				return -1;
+		}
 
 		if (cipher_des(aux_input, aux_output, keys[0]) < 0)
 			return -1;
@@ -476,8 +488,8 @@ int decipher_des_ecb(uint8_t* input, uint8_t* output, uint8_t* k) {
 	int times;
 	int index;
 	int repets;
-	uint8_t aux_input[66];
-	uint8_t aux_output[66];
+	uint8_t aux_input[BITS_64];
+	uint8_t aux_output[BITS_64];
 
 	output[0] = 2;
 
@@ -503,9 +515,9 @@ int decipher_des_cbc(uint8_t* input, uint8_t* output, uint8_t* k, uint8_t* iv) {
 	int times;
 	int index;
 	int repets;
-	uint8_t aux_input[66];
-	uint8_t aux_output[66];
-	uint8_t keys[3][66];
+	uint8_t aux_input[BITS_64];
+	uint8_t aux_output[BITS_64];
+	uint8_t keys[3][BITS_64];
 
 	output[0] = 2;
 
@@ -526,8 +538,14 @@ int decipher_des_cbc(uint8_t* input, uint8_t* output, uint8_t* k, uint8_t* iv) {
 		if (decipher_des(aux_input, aux_output, keys[0]) < 0)
 			return -1;
 
-		if (xor(aux_output, aux_output, iv) < 0)
-			return -1;
+		if (repets == 0) {
+			if (xor(aux_output, aux_output, iv) < 0)
+				return -1;
+		} else {
+			// input + index - 64: bloque de entrada anterior
+			if (xor(aux_output, aux_output, input + index - 64) < 0)
+				return -1;
+		}
 
 		intcat(output, aux_output);
 	}
@@ -548,13 +566,13 @@ int cipherNRounds(int rounds, uint8_t* input, uint8_t* output, uint8_t* k) {
 	int times;
 	int index;
 	int repets;
-	uint8_t l[34];
-	uint8_t r[34];
+	uint8_t l[BITS_32];
+	uint8_t r[BITS_32];
 	uint8_t** ks;
-	uint8_t aux_input[66];
-	uint8_t aux_output[66];
-	uint8_t output_f[36];
-	uint8_t output_xor[36];
+	uint8_t aux_input[BITS_64];
+	uint8_t aux_output[BITS_64];
+	uint8_t output_f[BITS_32];
+	uint8_t output_xor[BITS_32];
 
 	output[0] = 2;
 
@@ -627,13 +645,13 @@ int cipherRoundN(int round, uint8_t* input, uint8_t* output, uint8_t* k) {
 	int times;
 	int index;
 	int repets;
-	uint8_t l[34];
-	uint8_t r[34];
+	uint8_t l[BITS_32];
+	uint8_t r[BITS_32];
 	uint8_t** ks;
-	uint8_t aux_input[66];
-	uint8_t aux_output[66];
-	uint8_t output_f[36];
-	uint8_t output_xor[36];
+	uint8_t aux_input[BITS_64];
+	uint8_t aux_output[BITS_64];
+	uint8_t output_f[BITS_32];
+	uint8_t output_xor[BITS_32];
 
 	output[0] = 2;
 

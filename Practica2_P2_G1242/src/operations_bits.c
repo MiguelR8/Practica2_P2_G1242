@@ -169,6 +169,18 @@ int intcat(uint8_t* dst, const uint8_t* src) {
 	return 0;
 }
 
+int get_odd_parity(const uint8_t* src) {
+	if (src == NULL) {
+		return -1;
+	}
+	int i, c, len = intlen(src);
+	for (i = 0, c = 0; i < len; i++) {
+		if (src[i] == 1)
+			c++;
+	}
+	return c % 2;
+}
+
 int remove_parity_bits(const uint8_t* src, uint8_t* dst) {
 
 	// 56bits cadena resultante + fin de cadena => 56 * sizeof(int) + sizeof(int)

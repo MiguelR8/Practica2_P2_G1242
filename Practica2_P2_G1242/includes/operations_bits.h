@@ -19,6 +19,7 @@ int intncpy(uint8_t* dst, const uint8_t* src, int n);
 // Funciona con el numero 2 como fin de cadena
 int intlen(const uint8_t* array);
 int intcat(uint8_t* dst, const uint8_t* src);
+int get_odd_parity(const uint8_t* src);
 
 int remove_parity_bits(const uint8_t* src, uint8_t* dst);
 

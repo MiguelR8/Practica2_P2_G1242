@@ -9,6 +9,11 @@
 #include "../includes/algoritmos.h"
 #include "../tables/DES_tables.c"
 
+#define BITS_28 30
+#define BITS_32 34
+#define BITS_48 50
+#define BITS_56 58 
+#define BITS_64 66
 #define DES_ECB_K_SIZE 64 
 #define DES_CBC_K_SIZE 192 
 
