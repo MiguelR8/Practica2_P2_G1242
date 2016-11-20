@@ -18,6 +18,7 @@ int generate_k(char* k, int size_k) {
 		} else { // Generacion de numero
 			k[i] = getRandomFromMAddN('0', '9' - '0');
 		}
+		k[i] = (k[i] & 0xFE) | ((countSetBits(k[i] & 0xFE) & 0x1));
 	}
 
 	k[i] = '\0';
@@ -81,10 +82,9 @@ int key_generator(const uint8_t* k, uint8_t** ks) {
 	uint8_t aux_k[BITS_48];
 
 	// C0 y D0
-	
 	if (pc_1(k, c, d) < 0)
 		return -1;
-
+	
 	for (i = 0; i < ROUNDS; i++) {
 		// Cn
 		if (rotatory_left_shift_n(c, c, ROUND_SHIFTS[i]) < 0)
@@ -364,10 +364,10 @@ int decipher_des(uint8_t* input, uint8_t* output, uint8_t* k) {
 		if (!ks[i])
 			return -1;
 	}
-
+	
 	if (key_generator(k, ks) < 0)
 		return -1;
-
+	
 	if (initial_permutation(input, l, r) < 0)
 		return -1;
 
