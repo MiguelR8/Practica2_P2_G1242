@@ -166,14 +166,14 @@ int main (int argc, char* argv[]) {
 			case 'n':
 				n = atoi(optarg);
 				if (n > 0xFF || n < 1) {
-					printf("n debe ser menor que 255 y mayor que 1\n");
+					printf("n debe ser menor que 256 y mayor que 1\n");
 					return EXIT_FAILURE;
 				}
 				break;
 			case 'd':
 				d = atoi(optarg);
 				if (d > 0xFF || d < 2) {
-					printf("d debe ser menor que 255 y mayor que 2\n");
+					printf("d debe ser menor que 256 y mayor que 2\n");
 					return EXIT_FAILURE;
 				}
 				break;

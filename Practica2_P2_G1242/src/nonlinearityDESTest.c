@@ -451,7 +451,7 @@ int main (int argc, char* argv[]) {
 	}
 	if (d > 1) {
 		showIndividualLinearDependences(d);
-		showTotalLinearDependence(d);
+		//showTotalLinearDependence(d);
 	}
 	return EXIT_SUCCESS;;
 }

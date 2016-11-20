@@ -8,7 +8,7 @@
 #define NK 4
 #define NB 4
 #define CIPHER_BLOCK_SIZE (4*NB)
-#define NR 10
+#define NR 16
 
 uint8_t byteSub (uint8_t byte);
 uint8_t invByteSub (uint8_t byte);

@@ -227,8 +227,7 @@ int decipher_aes(uint8_t* in_state, uint8_t* out_state, uint8_t* key, uint8_t nk
 
 int cipher_aes_cbc(char* input, int len, char* output, uint8_t* IV, uint8_t* key,
 		uint8_t nk) {
-	//nb is constant, but nr depends on key size as well
-	uint8_t nr = NB + nk + 2;
+	uint8_t nr = NR;
 	uint8_t buf_block[CIPHER_BLOCK_SIZE];
 	uint16_t i, j;
 	
@@ -258,7 +257,7 @@ int cipher_aes_cbc(char* input, int len, char* output, uint8_t* IV, uint8_t* key
 }
 int decipher_aes_cbc(char* input, int len, char* output, uint8_t* IV, uint8_t* key,
 		uint8_t nk) {
-	uint8_t nr = NB + nk + 2;
+	uint8_t nr = NR;
 	uint16_t i, j;
 	
 	for (i = 0; i < len; i += CIPHER_BLOCK_SIZE) {

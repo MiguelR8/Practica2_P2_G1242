@@ -268,7 +268,7 @@ int convertDecimalToBinary(const int dec, uint8_t* bits, int num_bits) {
 		return -1;
 
 	int i;
-	int tempDec = dec;
+	uint8_t tempDec = dec;	//prevent modulo of negative numbers
 
 	for (i = (num_bits - 1); i >= 0; --i) {
 		if (tempDec) {

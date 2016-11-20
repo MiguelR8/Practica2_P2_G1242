@@ -3,7 +3,6 @@
 int main (int argc, char* argv[]) {
 	int c;
 	int i;
-	int j;
 	int len;
 	int modo = -1;
 	int n_to_add;
@@ -201,30 +200,26 @@ int main (int argc, char* argv[]) {
 				return EXIT_FAILURE;
 			}
 
-			for (i = 0; i < intlen(output); ++i) {
-				fprintf(fout, "%d ", output[i]);
+			for (i = 0; i < intlen(output); i += 8) {
+				intncpy((uint8_t*)aux_k, output + i, 8);
+				fputc(bits_to_char((uint8_t*)aux_k), fout);
 			}
-
-			fprintf(fout, "\n");
+			
 
 		} else {
-			input = (uint8_t *) malloc ((len + 2) * sizeof(uint8_t));
+			input = (uint8_t *) malloc ((8 * len + 2) * sizeof(uint8_t));
 			if (!input) {
 				free(k);
 				return EXIT_FAILURE;
 			}
 
-			for (i = 0, j = 0; i < len; i++) {
-				if (strbuf[i] == '0' || strbuf[i] == '1') {
-					input[j] = strbuf[i] - '0';
-					j++;
-				}
+			for (i = 0, input[0] = 2; i < len; i++) {
+				char_to_bits(strbuf[i], (uint8_t*)aux_k);
+				intcat(input, (uint8_t*)aux_k);
 			}
-			input[j] = 2;
+			printf("Read %d bytes\n", len);
 
-			printf("Read %d bytes\n", intlen(input));
-
-			output = (uint8_t *) malloc (len * sizeof(uint8_t));
+			output = (uint8_t *) malloc ((8 * len + 2) * sizeof(uint8_t));
 			if (!output) {
 				free(k);
 				free(input);
